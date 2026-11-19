@@ -128,10 +128,12 @@
 	<header>
 		<h1 id="hdr-title">🎁 แลกของแถม</h1>
 		<div class="actions hidden" id="hdr-staff">
+			<button id="btn-back-admin" class="hidden" onclick="backToAdmin()">← Admin</button>
+			<button id="btn-switch" class="hidden" onclick="showEventPicker()">⇄</button>
 			<button id="btn-summary" onclick="toggleStaffSummary()">📊 สรุป</button>
-			<button onclick="exportCsv(null)">⬇ CSV</button>
+			<button id="btn-csv-staff" onclick="exportCsv(S.event.id)">⬇ CSV</button>
 			<button onclick="refreshStaff()">↻</button>
-			<button onclick="logout()">ออก</button>
+			<button id="btn-logout-staff" onclick="logout()">ออก</button>
 		</div>
 		<div class="actions hidden" id="hdr-admin">
 			<button onclick="logout()">ออก</button>
@@ -145,6 +147,12 @@
 			<input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="กรอกรหัส">
 			<button class="btn btn-primary" id="btn-pin" onclick="login()">เข้าใช้งาน</button>
 			<div class="err" id="err-pin"></div>
+		</div>
+
+		<!-- ===== STAFF: เลือก Event (สาขาที่เปิดหลาย Event) ===== -->
+		<div id="view-staff-pick" class="hidden">
+			<div class="lbl" id="pick-title" style="margin-bottom:8px"></div>
+			<div id="pick-list"></div>
 		</div>
 
 		<!-- ===== STAFF ===== -->
@@ -199,6 +207,7 @@
 					</div>
 					<span id="ae-pill"></span>
 				</div>
+				<button class="btn btn-primary" id="ae-redeem" onclick="adminRedeem()">🎁 ไปหน้าแลกของ</button>
 			</div>
 			<div class="tabs">
 				<button class="tab on" data-tab="summary" onclick="adminTab('summary')">สรุป</button>
@@ -226,7 +235,7 @@
 					<input id="ed-branch" class="sm-input" inputmode="numeric" placeholder="เช่น 05432">
 				</div>
 				<label class="check"><input type="checkbox" id="ed-active" checked> เปิดใช้งาน (พนักงานเข้าได้)</label>
-				<div class="hint">1 สาขาเปิดได้ทีละ 1 Event</div>
+				<div class="hint">สาขาเดียวเปิดหลาย Event พร้อมกันได้ — พนักงานจะเลือก Event หลังใส่รหัสสาขา</div>
 			</div>
 
 			<div class="card">
@@ -266,12 +275,12 @@
 		// ============================
 
 		const LOW_STOCK = 10; // เหลือ ≤ 10 → เตือนสีเหลือง
-		const VIEWS = ['view-pin', 'view-staff', 'view-staff-summary', 'view-admin-list', 'view-admin-event', 'view-admin-edit'];
+		const VIEWS = ['view-pin', 'view-staff-pick', 'view-staff', 'view-staff-summary', 'view-admin-list', 'view-admin-event', 'view-admin-edit'];
 
 		let pin = '';
 		let role = null;
 		let images = {};            // gift_id → data URL
-		const S = { event: null, input: null };          // staff state
+		const S = { event: null, input: null, branch: null, events: [] }; // staff state (admin ใช้ตอนเข้าหน้าแลก)
 		const A = { eventId: null, event: null, tab: 'summary' }; // admin state
 		const ED = { event: null, gifts: [], removed: [], pickIdx: null }; // editor state
 
@@ -353,7 +362,12 @@
 				role = r.role;
 				store('gift_pin', pin);
 				if (role === 'admin') await startAdmin();
-				else await startStaff(r.event);
+				else {
+					S.branch = r.branchCode;
+					S.events = r.events;
+					if (r.events.length === 1) await startStaff(r.events[0]);
+					else showEventPicker();
+				}
 			} catch (e) {
 				$('err-pin').textContent = e.message;
 				pin = '';
@@ -369,8 +383,45 @@
 			$('hdr-admin').classList.add('hidden');
 			$('btn-summary').classList.remove('on');
 			$('hdr-title').innerHTML = '🎁 แลกของแถม';
+			S.event = null; S.events = []; S.branch = null;
 			closeModal();
 			showView('view-pin');
+		}
+
+		/* ---------- staff: เลือก Event ---------- */
+		async function showEventPicker() {
+			// โหลดรายการใหม่ทุกครั้ง เผื่อ Admin เพิ่ม/ปิด Event ระหว่างวัน
+			try { const r = await rpc('app_login'); S.events = r.events; S.branch = r.branchCode; }
+			catch (e) { handleError(e); return; }
+			$('hdr-title').innerHTML = '🎁 แลกของแถม<small>สาขา ' + esc(S.branch) + '</small>';
+			$('hdr-staff').classList.add('hidden');
+			$('hdr-admin').classList.remove('hidden');
+			$('pick-title').textContent = 'สาขา ' + S.branch + ' มี ' + S.events.length + ' Event ที่เปิดอยู่ — เลือก Event';
+			$('pick-list').innerHTML = S.events.map(function (e) {
+				const fields = [e.useMember ? 'รหัสสมาชิก' : null, e.useBillNo ? 'เลขที่บิล' : null, e.useBillAmount ? 'ยอดบิล' : null].filter(Boolean).join(', ');
+				return '<button class="ev-card" data-id="' + e.id + '"><div class="t">' + esc(e.name) + '</div>' +
+					'<div class="s">กรอก: ' + esc(fields) + (e.minBillAmount != null ? ' · ขั้นต่ำ ฿' + money(e.minBillAmount) : '') + '</div></button>';
+			}).join('');
+			$('pick-list').querySelectorAll('.ev-card').forEach(function (b) {
+				const ev = S.events.filter(function (x) { return x.id === Number(b.dataset.id); })[0];
+				b.addEventListener('click', function () { $('hdr-admin').classList.add('hidden'); startStaff(ev); });
+			});
+			showView('view-staff-pick');
+		}
+
+		/* ---------- admin: เข้าหน้าแลกของ Event ที่เลือก ---------- */
+		async function adminRedeem() {
+			$('hdr-admin').classList.add('hidden');
+			await startStaff(A.event);
+		}
+
+		function backToAdmin() {
+			$('hdr-staff').classList.add('hidden');
+			$('hdr-admin').classList.remove('hidden');
+			$('btn-summary').classList.remove('on');
+			$('hdr-title').innerHTML = '🎁 แลกของแถม<small>Admin</small>';
+			A.tab = 'log';
+			openAdminEvent(S.event.id);
 		}
 
 		/* =====================================================
@@ -380,11 +431,16 @@
 			S.event = event;
 			$('hdr-title').innerHTML = '🎁 ' + esc(event.name) + '<small>สาขา ' + esc(event.branchCode) + '</small>';
 			$('hdr-staff').classList.remove('hidden');
-			$('staff').value = load('gift_staff');
+			const isAdmin = role === 'admin';
+			$('btn-back-admin').classList.toggle('hidden', !isAdmin);
+			$('btn-switch').classList.toggle('hidden', isAdmin || S.events.length < 2);
+			['btn-summary', 'btn-csv-staff', 'btn-logout-staff'].forEach(function (id) { $(id).classList.toggle('hidden', isAdmin); });
+			$('btn-summary').classList.remove('on');
+			$('staff').value = load('gift_staff') || (isAdmin ? 'Admin' : '');
 			buildInputFields();
 			showView('view-staff');
 			resetStaff();
-			await loadImages(null);
+			await loadImages(event.id);
 			await loadStaffDashboard();
 		}
 
@@ -414,13 +470,13 @@
 
 		async function refreshStaff() {
 			if (!$('view-staff-summary').classList.contains('hidden')) return loadStaffSummary();
-			await loadImages(null);
+			await loadImages(S.event.id);
 			loadStaffDashboard();
 		}
 
 		async function loadStaffDashboard() {
 			try {
-				const d = await rpc('event_dashboard', { p_event_id: null });
+				const d = await rpc('event_dashboard', { p_event_id: S.event.id });
 				S.event = d.event;
 				renderStock($('stock'), d.gifts);
 				renderRecent($('recent'), d.recent, false);
@@ -461,7 +517,7 @@
 			const btn = $('btn-check');
 			btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...';
 			try {
-				const res = await rpc('staff_check', { p_member_id: inp.member, p_bill_no: inp.bill, p_bill_amount: inp.amount, p_staff: staffName() });
+				const res = await rpc('staff_check', { p_event_id: S.event.id, p_member_id: inp.member, p_bill_no: inp.bill, p_bill_amount: inp.amount, p_staff: staffName() });
 				if (!res.ok) setErr(res.message);
 				else if (res.duplicate) showDuplicate(res.prev, res.matchedBy, res.attempts);
 				else { S.input = res.input; showChoices(res.gifts); }
@@ -521,6 +577,7 @@
 			btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
 			try {
 				const res = await rpc('staff_redeem', {
+					p_event_id: S.event.id,
 					p_member_id: S.input.memberId, p_bill_no: S.input.billNo, p_bill_amount: S.input.billAmount,
 					p_gift_id: g.id, p_staff: staffName()
 				});
@@ -530,7 +587,7 @@
 					showResult('<div class="result ok"><h2>✅ แลกสำเร็จ</h2><p>' + describeInput(r) + '</p>' + giftImg(r.giftId) +
 						'<p>รับ <b>' + esc(r.giftName) + '</b></p><p>' + esc(r.ts) + '</p>' +
 						'<p style="font-size:13px">เหลือ ' + res.remaining + ' ชิ้น</p>' +
-						'<p class="note">กดผิด? แจ้ง Admin ให้ยกเลิกรายการ</p></div>');
+						'<p class="note">' + (role === 'admin' ? 'กดผิด? ยกเลิกได้ที่ ← Admin › รายการ' : 'กดผิด? แจ้ง Admin ให้ยกเลิกรายการ') + '</p></div>');
 				} else if (res.reason === 'DUPLICATE') {
 					showDuplicate(res.prev, res.matchedBy, 0);
 				} else if (res.reason === 'OUT_OF_STOCK') {
@@ -561,7 +618,7 @@
 
 		async function loadStaffSummary() {
 			$('staff-summary-body').innerHTML = '<div class="card muted">กำลังโหลด...</div>';
-			try { renderSummary($('staff-summary-body'), await rpc('event_summary', { p_event_id: null })); }
+			try { renderSummary($('staff-summary-body'), await rpc('event_summary', { p_event_id: S.event.id })); }
 			catch (e) { handleError(e); }
 		}
 
@@ -678,6 +735,7 @@
 			$('ae-sub').innerHTML = 'สาขา ' + esc(ev.branchCode) + ' · กรอก: ' + esc(fields) + '<br>กันซ้ำด้วย: ' + esc(dedup) +
 				(ev.minBillAmount != null ? ' · ขั้นต่ำ ฿' + money(ev.minBillAmount) : '');
 			$('ae-pill').innerHTML = '<span class="pill ' + (ev.isActive ? 'on' : 'off') + '">' + (ev.isActive ? 'เปิดอยู่' : 'ปิดแล้ว') + '</span>';
+			$('ae-redeem').classList.toggle('hidden', !ev.isActive);
 		}
 
 		async function adminTab(tab) {
