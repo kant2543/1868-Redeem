@@ -23,6 +23,10 @@
 		.btn-primary { background:var(--green); color:#fff; }
 		.btn-ghost { background:#e9eeeb; color:var(--ink); }
 		.btn:disabled { opacity:.5; }
+		/* reaction ตอนกดปุ่ม */
+		.btn, .gift-btn, header button { transition:transform .08s ease, filter .08s ease, background-color .15s ease; -webkit-tap-highlight-color:transparent; touch-action:manipulation; -webkit-user-select:none; user-select:none; }
+		.btn:not(:disabled):active, header button:active { transform:scale(.95); filter:brightness(.85); }
+		.gift-btn:not(:disabled):active { transform:scale(.97); background:#e3f6ea; }
 		.stock { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 		.stock div { background:#f7faf8; border-radius:10px; padding:10px; text-align:center; }
 		.stock b { font-size:26px; display:block; }
@@ -317,6 +321,13 @@
 		/* ---------- init ---------- */
 		$('member').addEventListener('keydown', function (e) { if (e.key === 'Enter') check(); });
 		$('pin').addEventListener('keydown', function (e) { if (e.key === 'Enter') login(); });
+
+		// ให้ :active ทำงานบน iOS Safari + สั่นเบาๆ ตอนกดปุ่ม (Android)
+		document.addEventListener('touchstart', function () {}, { passive: true });
+		document.addEventListener('click', function (e) {
+			const b = e.target.closest('button');
+			if (b && !b.disabled && navigator.vibrate) { try { navigator.vibrate(15); } catch (err) {} }
+		});
 
 		(function init() {
 			const saved = load('gift_pin');
