@@ -56,12 +56,49 @@
 		.modal { background:#fff; border-radius:16px; padding:20px; width:100%; max-width:400px; text-align:center; }
 		.modal .btns { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 		.err { color:var(--red); font-size:14px; margin-top:8px; }
+
+		/* กล่องคงเหลือ: รูป + เตือนใกล้หมด */
+		.stock .gift-img { width:64px; margin:0 auto 6px; }
+		.stock div.low { background:#fff6d1; box-shadow:inset 0 0 0 2px #FCDC0F; }
+		.stock div.low b { color:#a07800; }
+		.stock div.out { background:#fde8e9; box-shadow:inset 0 0 0 2px var(--red); }
+		.stock div.out b { color:var(--red); }
+		.stock .badge { display:inline-block; font-size:11px; font-weight:700; padding:1px 8px; border-radius:99px; margin-top:4px; }
+		.stock .low .badge { background:#FCDC0F; color:#5c4500; }
+		.stock .out .badge { background:var(--red); color:#fff; }
+
+		/* ปุ่มยกเลิกในรายการล่าสุด */
+		.recent .row { align-items:center; }
+		.recent .row .meta { display:flex; align-items:center; gap:8px; color:#999; white-space:nowrap; }
+		.btn-void { border:1px solid #e3c2c4; background:#fff; color:var(--red); border-radius:8px; padding:4px 10px; font:inherit; font-size:12px; }
+		.btn-void:active { transform:scale(.95); background:#fde8e9; }
+		.row.voided .txt { text-decoration:line-through; color:#999; }
+		.btn-void-lg { background:rgba(255,255,255,.18); color:#fff; border:1px solid rgba(255,255,255,.6); }
+
+		/* หน้าสรุป */
+		.sum-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+		.sum-grid div { background:#f7faf8; border-radius:10px; padding:10px; text-align:center; }
+		.sum-grid b { font-size:26px; display:block; }
+		.sum-grid small { color:var(--muted); font-size:12px; }
+		.sum-grid .red b { color:var(--red); }
+		table.sum { width:100%; border-collapse:collapse; font-size:13px; }
+		table.sum th { text-align:left; color:var(--muted); font-weight:600; padding:6px 4px; border-bottom:1px solid #e4e9e6; }
+		table.sum td { padding:6px 4px; border-bottom:1px solid #f0f3f1; vertical-align:middle; }
+		table.sum td.num, table.sum th.num { text-align:right; }
+		.bar { height:10px; border-radius:5px; background:var(--green); min-width:2px; }
+		.bar-wrap { background:#eef1ef; border-radius:5px; width:100%; }
+		.dup-item { padding:8px 0; border-bottom:1px solid #f0f3f1; font-size:13px; }
+		.dup-item b { font-size:15px; }
+		.dup-item .times { color:var(--red); font-weight:700; }
+		.muted { color:var(--muted); }
+		header button.on { background:#fff; color:var(--green); }
 	</style>
 </head>
 <body>
 	<header>
 		<h1>🎁 แลกของแถม</h1>
 		<div class="actions hidden" id="hdr-actions">
+			<button id="btn-summary" onclick="toggleSummary()">📊 สรุป</button>
 			<button onclick="exportCsv()">⬇ CSV</button>
 			<button onclick="loadDashboard()">↻</button>
 			<button onclick="logout()">ออก</button>
@@ -102,6 +139,12 @@
 				<label>รายการล่าสุด</label>
 				<div class="recent" id="recent"></div>
 			</div>
+		</div>
+
+		<!-- หน้าสรุป -->
+		<div id="view-summary" class="hidden">
+			<div id="summary-body"><div class="card muted">กำลังโหลด...</div></div>
+			<button class="btn btn-ghost" onclick="toggleSummary()">← กลับไปหน้าแลก</button>
 		</div>
 	</main>
 
@@ -171,6 +214,8 @@
 			pin = '';
 			$('pin').value = '';
 			$('view-app').classList.add('hidden');
+			$('view-summary').classList.add('hidden');
+			$('btn-summary').classList.remove('on');
 			$('hdr-actions').classList.add('hidden');
 			$('view-pin').classList.remove('hidden');
 		}
@@ -188,18 +233,128 @@
 		}
 
 		/* ---------- dashboard ---------- */
-		function renderDashboard(d) {
-			$('stock').innerHTML = d.gifts.map(function (g) {
-				return '<div><small>' + esc(g.name) + '</small><b>' + g.remaining + '</b><small>จาก ' + g.stock + ' (แลกแล้ว ' + g.used + ')</small></div>';
+		const LOW_STOCK = 10; // เหลือ ≤ 10 ชิ้น → เตือนสีเหลือง
+
+		function stockClass(g) {
+			return g.remaining <= 0 ? 'out' : g.remaining <= LOW_STOCK ? 'low' : '';
+		}
+
+		function renderStock(gifts) {
+			$('stock').innerHTML = gifts.map(function (g) {
+				const cls = stockClass(g);
+				const badge = cls === 'out' ? '<span class="badge">หมดแล้ว</span>'
+					: cls === 'low' ? '<span class="badge">ใกล้หมด</span>' : '';
+				return '<div class="' + cls + '">' + giftImg(g.id) + '<small>' + esc(g.name) + '</small><b>' + g.remaining + '</b>' +
+					'<small>จาก ' + g.stock + ' (แลกแล้ว ' + g.used + ')</small>' + (badge ? '<br>' + badge : '') + '</div>';
 			}).join('');
+		}
+
+		function renderDashboard(d) {
+			renderStock(d.gifts);
 
 			if (!d.recent.length) { $('recent').innerHTML = '<div style="color:#999">ยังไม่มีรายการ</div>'; return; }
 			$('recent').innerHTML = d.recent.map(function (x) {
 				const tag = x.status === 'REDEEMED' ? '<span class="tag r">รับ</span>'
 					: x.status === 'DUPLICATE_ATTEMPT' ? '<span class="tag d">ซ้ำ</span>'
+					: x.status === 'VOID' ? '<span class="tag v">ยกเลิก</span>'
 					: '<span class="tag v">' + esc(x.status) + '</span>';
-				return '<div class="row"><span>' + tag + ' ' + esc(x.memberId) + ' · ' + esc(x.giftName) + '</span><span style="color:#999">' + esc(x.ts.slice(11, 16)) + '</span></div>';
+				const voidBtn = x.status === 'REDEEMED'
+					? '<button class="btn-void" data-id="' + x.id + '" data-member="' + esc(x.memberId) + '" data-gift="' + esc(x.giftName) + '">ยกเลิก</button>'
+					: '';
+				return '<div class="row' + (x.status === 'VOID' ? ' voided' : '') + '"><span>' + tag + ' <span class="txt">' + esc(x.memberId) + ' · ' + esc(x.giftName) + '</span></span>' +
+					'<span class="meta">' + esc(x.ts.slice(11, 16)) + voidBtn + '</span></div>';
 			}).join('');
+			$('recent').querySelectorAll('.btn-void').forEach(function (b) {
+				b.addEventListener('click', function () { confirmVoid(Number(b.dataset.id), b.dataset.member, b.dataset.gift); });
+			});
+		}
+
+		/* ---------- ยกเลิกรายการ (ทุกคนที่มี PIN กดได้) ---------- */
+		function confirmVoid(logId, memberId, giftName) {
+			const m = $('modal');
+			m.innerHTML = '<div class="modal"><h3 style="margin-top:0">ยกเลิกรายการนี้?</h3>' +
+				'<p>บัตร <b>' + esc(memberId) + '</b><br>รับ <b>' + esc(giftName) + '</b></p>' +
+				'<p class="muted" style="font-size:13px">ระบบจะคืนของ 1 ชิ้น และบัตรนี้จะแลกใหม่ได้</p>' +
+				'<div class="btns"><button class="btn btn-ghost" id="btn-cancel">ไม่ใช่</button>' +
+				'<button class="btn btn-primary" style="background:var(--red)" id="btn-confirm">ยกเลิกรายการ</button></div></div>';
+			m.classList.remove('hidden');
+			$('btn-cancel').onclick = closeModal;
+			$('btn-confirm').onclick = function () { doVoid(logId); };
+		}
+
+		async function doVoid(logId) {
+			const btn = $('btn-confirm');
+			btn.disabled = true; btn.textContent = 'กำลังยกเลิก...';
+			try {
+				const res = await rpc('void_redemption', { p_log_id: logId, p_staff: staffName() });
+				closeModal();
+				if (!res.ok) setErr('รายการนี้ถูกยกเลิกไปแล้ว');
+				if (!$('step-result').classList.contains('hidden') && $('step-result').querySelector('.result.ok')) reset();
+				loadDashboard();
+				if (!$('view-summary').classList.contains('hidden')) loadSummary();
+			} catch (e) {
+				closeModal();
+				handleError(e);
+			}
+		}
+
+		/* ---------- หน้าสรุป ---------- */
+		function toggleSummary() {
+			const showing = !$('view-summary').classList.contains('hidden');
+			$('view-summary').classList.toggle('hidden', showing);
+			$('view-app').classList.toggle('hidden', !showing);
+			$('btn-summary').classList.toggle('on', !showing);
+			if (!showing) loadSummary(); else loadDashboard();
+			window.scrollTo(0, 0);
+		}
+
+		async function loadSummary() {
+			try { renderSummary(await rpc('get_summary')); } catch (e) { handleError(e); }
+		}
+
+		function renderSummary(s) {
+			const t = s.totals;
+			const totals = '<div class="card"><label>ภาพรวม</label><div class="sum-grid">' +
+				'<div><b>' + t.redeemed + '</b><small>แจกแล้ว</small></div>' +
+				'<div class="red"><b>' + t.duplicateAttempts + '</b><small>พยายามแลกซ้ำ (' + t.duplicateMembers + ' บัตร)</small></div>' +
+				'<div><b>' + t.voided + '</b><small>ยกเลิกรายการ</small></div>' +
+				'<div><b>' + s.gifts.reduce(function (a, g) { return a + g.remaining; }, 0) + '</b><small>ของคงเหลือรวม</small></div>' +
+				'</div></div>';
+
+			const stock = '<div class="card"><label>คงเหลือ</label><table class="sum">' +
+				s.gifts.map(function (g) {
+					const pct = g.stock ? Math.round(g.used / g.stock * 100) : 0;
+					return '<tr><td>' + esc(g.name) + '</td><td style="width:45%"><div class="bar-wrap"><div class="bar" style="width:' + pct + '%"></div></div></td>' +
+						'<td class="num">' + g.used + '/' + g.stock + '</td></tr>';
+				}).join('') + '</table></div>';
+
+			const gA = (s.gifts.filter(function (g) { return g.id === 'A'; })[0] || {}).name || 'A';
+			const gB = (s.gifts.filter(function (g) { return g.id === 'B'; })[0] || {}).name || 'B';
+			const maxH = Math.max.apply(null, s.hourly.map(function (h) { return h.redeemed; }).concat([1]));
+			const hourly = '<div class="card"><label>รายชั่วโมง <span style="font-size:12px">(A = ' + esc(gA) + ' · B = ' + esc(gB) + ')</span></label>' + (s.hourly.length ?
+				'<table class="sum"><tr><th>ชั่วโมง</th><th></th><th class="num">A</th><th class="num">B</th><th class="num">ซ้ำ</th></tr>' +
+				s.hourly.map(function (h) {
+					return '<tr><td style="white-space:nowrap">' + esc(h.hour) + '</td>' +
+						'<td style="width:30%"><div class="bar-wrap"><div class="bar" style="width:' + Math.round(h.redeemed / maxH * 100) + '%"></div></div></td>' +
+						'<td class="num">' + h.giftA + '</td><td class="num">' + h.giftB + '</td>' +
+						'<td class="num" style="color:var(--red)">' + (h.duplicateAttempts || '') + '</td></tr>';
+				}).join('') + '</table>' : '<div class="muted">ยังไม่มีข้อมูล</div>') + '</div>';
+
+			const staff = '<div class="card"><label>รายพนักงาน</label>' + (s.byStaff.length ?
+				'<table class="sum"><tr><th>พนักงาน</th><th class="num">แจก</th><th class="num">ยกเลิก</th><th class="num">จับซ้ำได้</th></tr>' +
+				s.byStaff.map(function (r) {
+					return '<tr><td>' + esc(r.staff) + '</td><td class="num">' + r.handedOut + '</td><td class="num">' + (r.voided || '') + '</td>' +
+						'<td class="num" style="color:var(--red)">' + (r.duplicateCaught || '') + '</td></tr>';
+				}).join('') + '</table>' : '<div class="muted">ยังไม่มีข้อมูล</div>') + '</div>';
+
+			const dups = '<div class="card"><label>บัตรที่พยายามแลกซ้ำ</label>' + (s.duplicates.length ?
+				s.duplicates.map(function (d) {
+					return '<div class="dup-item"><b>' + esc(d.memberId) + '</b> <span class="times">×' + d.attempts + '</span><br>' +
+						'<span class="muted">รับ ' + esc(d.giftName || '-') + ' เมื่อ ' + esc(d.redeemedAt || '-') + (d.staff ? ' โดย ' + esc(d.staff) : '') + '</span><br>' +
+						'<span class="muted">มาแลกซ้ำล่าสุด ' + esc(d.lastAttempt) + '</span></div>';
+				}).join('') : '<div class="muted">ยังไม่มีคนแลกซ้ำ 👍</div>') + '</div>';
+
+			$('summary-body').innerHTML = totals + stock + hourly + staff + dups;
 		}
 
 		async function loadDashboard() {
@@ -288,7 +443,10 @@
 				if (res.ok) {
 					showResult('<div class="result ok"><h2>✅ แลกสำเร็จ</h2><p>บัตร ' + esc(res.memberId) + '</p>' +
 						giftImg(res.gift.id) + '<p>รับ <b>' + esc(res.gift.name) + '</b></p><p>' + esc(res.ts) + '</p>' +
-						'<p style="font-size:13px">เหลือ ' + res.gift.remaining + ' ชิ้น</p></div>');
+						'<p style="font-size:13px">เหลือ ' + res.gift.remaining + ' ชิ้น</p>' +
+						(res.logId ? '<button class="btn btn-void-lg" id="btn-void-last">กดผิด? ยกเลิกรายการนี้</button>' : '') +
+						'</div>');
+					if (res.logId) $('btn-void-last').onclick = function () { confirmVoid(res.logId, res.memberId, res.gift.name); };
 				} else if (res.reason === 'DUPLICATE') {
 					showDuplicate(res.prev, 0);
 				} else if (res.reason === 'OUT_OF_STOCK') {
