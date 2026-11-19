@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+	<title>แลกของแถม</title>
+	<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+	<style>
+		:root { --green:#00AE3D; --red:#E82128; --bg:#f4f6f5; --ink:#1d2320; --muted:#6b736f; }
+		* { box-sizing:border-box; }
+		body { margin:0; font-family:'IBM Plex Sans Thai',sans-serif; background:var(--bg); color:var(--ink); }
+		header { background:var(--green); color:#fff; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; gap:8px; }
+		header h1 { font-size:18px; margin:0; }
+		header .actions { display:flex; gap:6px; }
+		header button { background:rgba(255,255,255,.2); color:#fff; border:0; border-radius:8px; padding:6px 10px; font:inherit; font-size:13px; }
+		main { padding:14px; max-width:520px; margin:0 auto; }
+		.card { background:#fff; border-radius:14px; padding:14px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+		label { font-size:13px; color:var(--muted); display:block; margin-bottom:4px; }
+		input { width:100%; font:inherit; font-size:22px; padding:12px; border:2px solid #dde3e0; border-radius:10px; }
+		input:focus { outline:none; border-color:var(--green); }
+		#staff { font-size:15px; padding:8px 10px; }
+		.btn { width:100%; border:0; border-radius:12px; padding:16px; font:inherit; font-size:18px; font-weight:700; margin-top:10px; }
+		.btn-primary { background:var(--green); color:#fff; }
+		.btn-ghost { background:#e9eeeb; color:var(--ink); }
+		.btn:disabled { opacity:.5; }
+		.stock { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+		.stock div { background:#f7faf8; border-radius:10px; padding:10px; text-align:center; }
+		.stock b { font-size:26px; display:block; }
+		.stock small { color:var(--muted); }
+		.gift-btn { display:block; width:100%; text-align:left; background:#fff; border:3px solid var(--green); border-radius:14px; padding:16px; margin-top:10px; font:inherit; }
+		.gift-btn .n { font-size:20px; font-weight:700; }
+		.gift-btn .r { color:var(--muted); font-size:14px; }
+		.gift-btn:disabled { border-color:#ccc; opacity:.5; }
+		.result { border-radius:14px; padding:18px; color:#fff; text-align:center; }
+		.result h2 { margin:0 0 6px; font-size:24px; }
+		.result p { margin:4px 0; font-size:16px; }
+		.ok { background:var(--green); }
+		.dup { background:var(--red); }
+		.warn { background:#b88a00; }
+		.recent { font-size:13px; }
+		.recent .row { display:flex; justify-content:space-between; gap:8px; padding:6px 0; border-bottom:1px solid #eef1ef; }
+		.tag { font-size:11px; padding:2px 6px; border-radius:6px; color:#fff; white-space:nowrap; }
+		.tag.r { background:var(--green); } .tag.d { background:var(--red); } .tag.v { background:#999; }
+		.hidden { display:none !important; }
+		.modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; padding:20px; }
+		.modal { background:#fff; border-radius:16px; padding:20px; width:100%; max-width:400px; text-align:center; }
+		.modal .btns { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+		.err { color:var(--red); font-size:14px; margin-top:8px; }
+	</style>
+</head>
+<body>
+	<header>
+		<h1>🎁 แลกของแถม</h1>
+		<div class="actions hidden" id="hdr-actions">
+			<button onclick="exportCsv()">⬇ CSV</button>
+			<button onclick="loadDashboard()">↻</button>
+			<button onclick="logout()">ออก</button>
+		</div>
+	</header>
+
+	<main>
+		<!-- หน้า PIN -->
+		<div class="card" id="view-pin">
+			<label>PIN สำหรับพนักงาน</label>
+			<input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="กรอก PIN">
+			<button class="btn btn-primary" id="btn-pin" onclick="login()">เข้าใช้งาน</button>
+			<div class="err" id="err-pin"></div>
+		</div>
+
+		<!-- หน้าใช้งาน -->
+		<div id="view-app" class="hidden">
+			<div class="card">
+				<label>ชื่อพนักงาน (จำไว้ในเครื่องนี้)</label>
+				<input id="staff" placeholder="เช่น สมชาย" onchange="saveStaff()">
+			</div>
+
+			<div class="card" id="step-input">
+				<label>เลขบัตรสมาชิก</label>
+				<input id="member" inputmode="numeric" autocomplete="off" placeholder="กรอกเลขบัตร">
+				<button class="btn btn-primary" id="btn-check" onclick="check()">ตรวจสอบ</button>
+				<div class="err" id="err"></div>
+			</div>
+
+			<div id="step-result" class="hidden"></div>
+
+			<div class="card">
+				<label>คงเหลือ</label>
+				<div class="stock" id="stock">กำลังโหลด...</div>
+			</div>
+
+			<div class="card">
+				<label>รายการล่าสุด</label>
+				<div class="recent" id="recent"></div>
+			</div>
+		</div>
+	</main>
+
+	<div id="modal" class="modal-bg hidden"></div>
+
+	<script>
+		// ===== ตั้งค่า: Supabase → Project Settings → API =====
+		const SUPABASE_URL = 'https://oosvphgpaduobraeoeir.supabase.co';
+		const SUPABASE_KEY = 'sb_publishable_fSjDKNm4HIU5lWTbCo11Dg_3hcjQh-l';
+		// =====================================================
+
+		let pin = '';
+		let currentMember = null;
+
+		/* ---------- storage (ห่อ try/catch เผื่อ browser ปิด) ---------- */
+		function store(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} }
+		function load(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
+
+		/* ---------- เรียก Supabase RPC ---------- */
+		async function rpc(fn, args) {
+			const headers = { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' };
+			// key แบบเก่า (JWT) ต้องส่ง Authorization ด้วย, key ใหม่ sb_publishable_ ส่งแค่ apikey
+			if (!SUPABASE_KEY.startsWith('sb_')) headers['Authorization'] = 'Bearer ' + SUPABASE_KEY;
+			const res = await fetch(SUPABASE_URL + '/rest/v1/rpc/' + fn, {
+				method: 'POST',
+				headers: headers,
+				body: JSON.stringify(Object.assign({ p_pin: pin }, args || {}))
+			});
+			const data = await res.json().catch(function () { return null; });
+			if (!res.ok) {
+				const err = new Error((data && data.message) || ('เกิดข้อผิดพลาด (' + res.status + ')'));
+				err.code = data && data.code;
+				throw err;
+			}
+			return data;
+		}
+
+		function esc(s) {
+			return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+				return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+			});
+		}
+		function $(id) { return document.getElementById(id); }
+		function staffName() { return $('staff').value.trim(); }
+		function saveStaff() { store('gift_staff', staffName()); }
+		function setErr(msg) { $('err').textContent = msg || ''; }
+
+		/* ---------- PIN ---------- */
+		async function login() {
+			pin = $('pin').value.trim();
+			$('err-pin').textContent = '';
+			$('btn-pin').disabled = true;
+			try {
+				const d = await rpc('get_dashboard');
+				store('gift_pin', pin);
+				showApp();
+				renderDashboard(d);
+			} catch (e) {
+				$('err-pin').textContent = e.message;
+				pin = '';
+			}
+			$('btn-pin').disabled = false;
+		}
+
+		function logout() {
+			store('gift_pin', null);
+			pin = '';
+			$('pin').value = '';
+			$('view-app').classList.add('hidden');
+			$('hdr-actions').classList.add('hidden');
+			$('view-pin').classList.remove('hidden');
+		}
+
+		function showApp() {
+			$('view-pin').classList.add('hidden');
+			$('view-app').classList.remove('hidden');
+			$('hdr-actions').classList.remove('hidden');
+			$('staff').value = load('gift_staff');
+		}
+
+		function handleError(e) {
+			if (e.code === '28000') { logout(); $('err-pin').textContent = e.message; return; }
+			setErr(e.message);
+		}
+
+		/* ---------- dashboard ---------- */
+		function renderDashboard(d) {
+			$('stock').innerHTML = d.gifts.map(function (g) {
+				return '<div><small>' + esc(g.name) + '</small><b>' + g.remaining + '</b><small>จาก ' + g.stock + ' (แลกแล้ว ' + g.used + ')</small></div>';
+			}).join('');
+
+			if (!d.recent.length) { $('recent').innerHTML = '<div style="color:#999">ยังไม่มีรายการ</div>'; return; }
+			$('recent').innerHTML = d.recent.map(function (x) {
+				const tag = x.status === 'REDEEMED' ? '<span class="tag r">รับ</span>'
+					: x.status === 'DUPLICATE_ATTEMPT' ? '<span class="tag d">ซ้ำ</span>'
+					: '<span class="tag v">' + esc(x.status) + '</span>';
+				return '<div class="row"><span>' + tag + ' ' + esc(x.memberId) + ' · ' + esc(x.giftName) + '</span><span style="color:#999">' + esc(x.ts.slice(11, 16)) + '</span></div>';
+			}).join('');
+		}
+
+		async function loadDashboard() {
+			try { renderDashboard(await rpc('get_dashboard')); } catch (e) { handleError(e); }
+		}
+
+		/* ---------- เช็คเลขบัตร ---------- */
+		async function check() {
+			const id = $('member').value;
+			if (!id.trim()) { setErr('กรุณากรอกเลขบัตรสมาชิก'); return; }
+			setErr('');
+			const btn = $('btn-check');
+			btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...';
+			try {
+				const res = await rpc('check_member', { p_member_id: id, p_staff: staffName() });
+				currentMember = res.memberId;
+				if (res.duplicate) showDuplicate(res.prev, res.attempts);
+				else showChoices(res.gifts);
+				loadDashboard();
+			} catch (e) {
+				handleError(e);
+			}
+			btn.disabled = false; btn.textContent = 'ตรวจสอบ';
+		}
+
+		function showResult(html) {
+			$('step-input').classList.add('hidden');
+			$('step-result').innerHTML = html + '<button class="btn btn-ghost" onclick="reset()">คนต่อไป</button>';
+			$('step-result').classList.remove('hidden');
+		}
+
+		function showDuplicate(prev, attempts) {
+			showResult(
+				'<div class="result dup"><h2>❌ รับไปแล้ว</h2>' +
+				'<p>บัตร ' + esc(prev.memberId) + '</p>' +
+				'<p>รับ <b>' + esc(prev.giftName) + '</b></p>' +
+				'<p>เมื่อ ' + esc(prev.ts) + '</p>' +
+				(prev.staff ? '<p>โดย ' + esc(prev.staff) + '</p>' : '') +
+				(attempts ? '<p style="opacity:.85;font-size:13px">พยายามแลกซ้ำครั้งที่ ' + attempts + '</p>' : '') +
+				'</div>'
+			);
+		}
+
+		function showChoices(gifts) {
+			const btns = gifts.map(function (g) {
+				return '<button class="gift-btn" data-id="' + esc(g.id) + '" data-name="' + esc(g.name) + '"' + (g.remaining <= 0 ? ' disabled' : '') + '>' +
+					'<div class="n">' + esc(g.name) + '</div>' +
+					'<div class="r">' + (g.remaining <= 0 ? 'หมดแล้ว' : 'เหลือ ' + g.remaining + ' ชิ้น') + '</div></button>';
+			}).join('');
+			$('step-input').classList.add('hidden');
+			$('step-result').innerHTML = '<div class="card"><label>✅ บัตร ' + esc(currentMember) + ' ยังไม่เคยรับ — เลือกของแถม</label>' + btns +
+				'<button class="btn btn-ghost" onclick="reset()">ยกเลิก</button></div>';
+			$('step-result').classList.remove('hidden');
+			$('step-result').querySelectorAll('.gift-btn').forEach(function (b) {
+				b.addEventListener('click', function () { confirmGift(b.dataset.id, b.dataset.name); });
+			});
+		}
+
+		/* ---------- ยืนยัน + บันทึก ---------- */
+		function confirmGift(giftId, giftName) {
+			const m = $('modal');
+			m.innerHTML = '<div class="modal"><h3 style="margin-top:0">ยืนยันการแลก</h3>' +
+				'<p>บัตร <b>' + esc(currentMember) + '</b><br>รับ <b>' + esc(giftName) + '</b></p>' +
+				'<div class="btns"><button class="btn btn-ghost" id="btn-cancel">ยกเลิก</button>' +
+				'<button class="btn btn-primary" id="btn-confirm">ยืนยัน</button></div></div>';
+			m.classList.remove('hidden');
+			$('btn-cancel').onclick = closeModal;
+			$('btn-confirm').onclick = function () { doRedeem(giftId); };
+		}
+
+		function closeModal() { $('modal').classList.add('hidden'); }
+
+		async function doRedeem(giftId) {
+			const btn = $('btn-confirm');
+			btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
+			try {
+				const res = await rpc('redeem', { p_member_id: currentMember, p_gift_id: giftId, p_staff: staffName() });
+				closeModal();
+				if (res.ok) {
+					showResult('<div class="result ok"><h2>✅ แลกสำเร็จ</h2><p>บัตร ' + esc(res.memberId) + '</p>' +
+						'<p>รับ <b>' + esc(res.gift.name) + '</b></p><p>' + esc(res.ts) + '</p>' +
+						'<p style="font-size:13px">เหลือ ' + res.gift.remaining + ' ชิ้น</p></div>');
+				} else if (res.reason === 'DUPLICATE') {
+					showDuplicate(res.prev, 0);
+				} else if (res.reason === 'OUT_OF_STOCK') {
+					showResult('<div class="result warn"><h2>⚠️ ' + esc(res.gift.name) + ' หมดแล้ว</h2><p>ให้ลูกค้าเลือกอีกอย่าง</p></div>');
+				}
+				loadDashboard();
+			} catch (e) {
+				closeModal();
+				handleError(e);
+			}
+		}
+
+		function reset() {
+			currentMember = null;
+			$('step-result').classList.add('hidden');
+			$('step-input').classList.remove('hidden');
+			$('member').value = '';
+			$('member').focus();
+			setErr('');
+		}
+
+		/* ---------- export CSV (มี BOM ให้ Excel อ่านภาษาไทยได้) ---------- */
+		async function exportCsv() {
+			try {
+				const rows = await rpc('export_log');
+				const head = ['timestamp', 'member_id', 'gift_id', 'gift_name', 'staff', 'status'];
+				const q = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+				// member_id ใส่ ="..." กัน Excel ตัดเลข 0 นำหน้า
+				const lines = rows.map(function (r) {
+					return [q(r.ts), '="' + r.memberId + '"', q(r.giftId), q(r.giftName), q(r.staff), q(r.status)].join(',');
+				});
+				const csv = '﻿' + head.join(',') + '\n' + lines.join('\n');
+				const a = document.createElement('a');
+				a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+				const d = new Date();
+				a.download = 'gift_log_' + d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') + '.csv';
+				a.click();
+			} catch (e) {
+				handleError(e);
+			}
+		}
+
+		/* ---------- init ---------- */
+		$('member').addEventListener('keydown', function (e) { if (e.key === 'Enter') check(); });
+		$('pin').addEventListener('keydown', function (e) { if (e.key === 'Enter') login(); });
+
+		(function init() {
+			const saved = load('gift_pin');
+			if (saved) { $('pin').value = saved; login(); }
+		})();
+	</script>
+</body>
+</html>
