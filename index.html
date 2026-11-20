@@ -365,8 +365,9 @@
 				</div>
 
 				<div class="lbl" style="margin-top:12px">กันแลกซ้ำด้วย</div>
-				<label class="check" id="ed-dedup-member-row"><input type="checkbox" id="ed-dedup-member"> รหัสสมาชิก (1 คน รับได้ 1 ครั้ง)</label>
-				<label class="check" id="ed-dedup-bill-row"><input type="checkbox" id="ed-dedup-bill"> เลขที่บิล (1 บิล ใช้ได้ 1 ครั้ง)</label>
+				<label class="check" id="ed-dedup-member-row"><input type="checkbox" id="ed-dedup-member" onchange="syncEditorChecks()"> รหัสสมาชิก (1 คน รับได้ 1 ครั้ง)</label>
+				<label class="check" id="ed-dedup-bill-row"><input type="checkbox" id="ed-dedup-bill" onchange="syncEditorChecks()"> เลขที่บิล (1 บิล ใช้ได้ 1 ครั้ง)</label>
+				<div class="hint hidden" id="ed-dedup-none" style="color:var(--red)">⚠️ ไม่ได้ติ๊กกันซ้ำ → สมาชิก/บิลเดิมแลกซ้ำได้ไม่จำกัด</div>
 				<div class="hint" id="ed-lock-hint"></div>
 				<button class="btn btn-ghost btn-sm hidden" id="ed-clear" onclick="clearTestData()">🧹 ล้างข้อมูลทดสอบ (ปลดล็อกการตั้งค่า)</button>
 			</div>
@@ -1113,7 +1114,7 @@
 			$('ae-name').textContent = ev.name;
 			const fields = [ev.useMember ? 'รหัสสมาชิก' : null, ev.useBillNo ? 'เลขที่บิล' : null, ev.useBillAmount ? 'ยอดบิล' : null, ev.useNote ? 'หมายเหตุ' : null, ev.usePhotos ? 'รูป' : null].filter(Boolean).join(', ');
 			const dedup = [ev.dedupMember ? 'สมาชิก' : null, ev.dedupBill ? 'บิล' : null].filter(Boolean).join(' + ');
-			$('ae-sub').innerHTML = 'สาขา ' + esc(ev.branchCode) + ' · กรอก: ' + esc(fields) + '<br>กันซ้ำด้วย: ' + esc(dedup) +
+			$('ae-sub').innerHTML = 'สาขา ' + esc(ev.branchCode) + ' · กรอก: ' + esc(fields) + '<br>กันซ้ำด้วย: ' + esc(dedup || 'ไม่กันซ้ำ (แลกซ้ำได้)') +
 				(ev.minBillAmount != null ? ' · ขั้นต่ำ ฿' + money(ev.minBillAmount) : '');
 			$('ae-pill').innerHTML = '<span class="pill ' + (ev.isActive ? 'on' : 'off') + '">' + (ev.isActive ? 'เปิดอยู่' : 'ปิดแล้ว') + '</span>';
 			$('ae-redeem').classList.toggle('hidden', !ev.isActive);
@@ -1369,8 +1370,7 @@
 			['ed-use-member', 'ed-use-bill', 'ed-use-amount'].forEach(function (id) { $(id).disabled = locked; $(id).parentNode.classList.toggle('disabled', locked); });
 			if (!useM) $('ed-dedup-member').checked = false;
 			if (!useB) $('ed-dedup-bill').checked = false;
-			if (useM && !useB) $('ed-dedup-member').checked = true;
-			if (useB && !useM) $('ed-dedup-bill').checked = true;
+			$('ed-dedup-none').classList.toggle('hidden', $('ed-dedup-member').checked || $('ed-dedup-bill').checked);
 			$('ed-dedup-member').disabled = locked || !useM;
 			$('ed-dedup-bill').disabled = locked || !useB;
 			$('ed-dedup-member-row').classList.toggle('disabled', locked || !useM);
