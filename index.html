@@ -103,6 +103,13 @@
 		/* admin */
 		.ev-card { display:block; width:100%; text-align:left; background:#fff; border:0; border-radius:14px; padding:14px; margin-bottom:10px; font:inherit; box-shadow:0 1px 3px rgba(0,0,0,.06); }
 		.ev-card .t { font-size:16px; font-weight:700; }
+		.ev-card.thumbed { display:flex; gap:12px; align-items:center; }
+		.ev-card .ev-body { flex:1; min-width:0; }
+		.ev-thumb { flex:0 0 72px; width:72px; height:72px; border-radius:12px; background:#eef3ef; display:flex; align-items:center; justify-content:center; font-size:30px; overflow:hidden; }
+		.ev-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+		.cover-pick { position:relative; width:100%; aspect-ratio:16/9; max-height:200px; border-radius:12px; background:#eef3ef; border:2px dashed #cfe3d6; display:flex; align-items:center; justify-content:center; overflow:hidden; cursor:pointer; color:var(--muted); font-size:14px; }
+		.cover-pick img { width:100%; height:100%; object-fit:cover; }
+		.cover-acts { display:flex; gap:8px; margin-top:6px; }
 		.ev-card .s { font-size:13px; color:var(--muted); margin-top:2px; }
 		.pill { font-size:11px; font-weight:700; padding:2px 8px; border-radius:99px; white-space:nowrap; }
 		.pill.on { background:#e3f6ea; color:#00782a; }
@@ -347,6 +354,12 @@
 					<input id="ed-name" class="sm-input" placeholder="เช่น งานแฟร์ปีใหม่ 2027">
 				</div>
 				<div class="field">
+					<label>รูปปก Event (แสดงในรายการ Event · ไม่ใส่ = ใช้รูปของรางวัลชิ้นแรก)</label>
+					<div class="cover-pick" id="ed-cover" onclick="$('ed-cover-file').value=''; $('ed-cover-file').click()"></div>
+					<div class="cover-acts hidden" id="ed-cover-acts"><button type="button" class="chip g" onclick="$('ed-cover-file').value=''; $('ed-cover-file').click()">เปลี่ยนรูป</button><button type="button" class="chip" onclick="removeCover()">ลบรูปปก</button></div>
+					<input type="file" id="ed-cover-file" accept="image/*" class="hidden">
+				</div>
+				<div class="field">
 					<label>รหัสสาขา (ใช้เป็น PIN ของพนักงาน)</label>
 					<input id="ed-branch" class="sm-input" inputmode="numeric" placeholder="เช่น 05432">
 				</div>
@@ -407,7 +420,8 @@
 		let images = {};            // gift_id → data URL
 		const S = { event: null, input: null, branch: null, events: [] }; // staff state (admin ใช้ตอนเข้าหน้าแลก)
 		const A = { eventId: null, event: null, tab: 'summary' }; // admin state
-		const ED = { event: null, gifts: [], removed: [], pickIdx: null, tiers: [] }; // editor state
+		const ED = { event: null, gifts: [], removed: [], pickIdx: null, tiers: [], cover: null, coverNew: null, coverRemove: false };
+		let THUMBS = {}; // eventId → { image, isCover } // editor state
 
 		/* ---------- utils ---------- */
 		function $(id) { return document.getElementById(id); }
@@ -460,6 +474,20 @@
 
 		async function loadImages(eventId) {
 			try { images = await rpc('gift_images', { p_event_id: eventId }); } catch (e) { images = {}; }
+		}
+
+		// thumbnail การ์ด Event: โหลดตามหลังรายการ แล้วเติมรูปลงช่อง .ev-thumb
+		function thumbHtml(id) {
+			const t = THUMBS[id];
+			return '<div class="ev-thumb" data-thumb="' + id + '">' + (t && t.image ? '<img src="' + t.image + '" alt="">' : '🎁') + '</div>';
+		}
+		async function loadThumbs(el) {
+			try { THUMBS = await rpc('event_thumbs') || {}; } catch (e) { return; }
+			if (!el) return;
+			el.querySelectorAll('.ev-thumb[data-thumb]').forEach(function (d) {
+				const t = THUMBS[d.dataset.thumb];
+				d.innerHTML = t && t.image ? '<img src="' + t.image + '" alt="">' : '🎁';
+			});
 		}
 
 		// "× 3" เมื่อแจกมากกว่า 1 ชิ้น
@@ -615,9 +643,10 @@
 			$('pick-title').textContent = 'สาขา ' + S.branch + ' มี ' + S.events.length + ' Event ที่เปิดอยู่ — เลือก Event';
 			$('pick-list').innerHTML = S.events.map(function (e) {
 				const fields = [e.useMember ? 'รหัสสมาชิก' : null, e.useBillNo ? 'เลขที่บิล' : null, e.useBillAmount ? 'ยอดบิล' : null, e.useNote ? 'หมายเหตุ' : null, e.usePhotos ? 'รูป' : null].filter(Boolean).join(', ');
-				return '<button class="ev-card" data-id="' + e.id + '"><div class="t">' + esc(e.name) + '</div>' +
-					'<div class="s">กรอก: ' + esc(fields) + (e.minBillAmount != null ? ' · ขั้นต่ำ ฿' + money(e.minBillAmount) : '') + (e.tiers && e.tiers.length ? ' · Tier ' + esc(tierText(e.tiers)) : '') + '</div></button>';
+				return '<button class="ev-card thumbed" data-id="' + e.id + '">' + thumbHtml(e.id) + '<div class="ev-body"><div class="t">' + esc(e.name) + '</div>' +
+					'<div class="s">กรอก: ' + esc(fields) + (e.minBillAmount != null ? ' · ขั้นต่ำ ฿' + money(e.minBillAmount) : '') + (e.tiers && e.tiers.length ? ' · Tier ' + esc(tierText(e.tiers)) : '') + '</div></div></button>';
 			}).join('');
+			loadThumbs($('pick-list'));
 			$('pick-list').querySelectorAll('.ev-card').forEach(function (b) {
 				const ev = S.events.filter(function (x) { return x.id === Number(b.dataset.id); })[0];
 				b.addEventListener('click', function () { $('hdr-admin').classList.add('hidden'); startStaff(ev); });
@@ -1116,12 +1145,13 @@
 				const list = await rpc('admin_list_events');
 				if (!list.length) { $('event-list').innerHTML = '<div class="card muted">ยังไม่มี Event — กดสร้างด้านบน</div>'; return; }
 				$('event-list').innerHTML = list.map(function (e) {
-					return '<button class="ev-card" data-id="' + e.id + '"><div class="row-between"><span class="t">' + esc(e.name) + '</span>' +
+					return '<button class="ev-card thumbed" data-id="' + e.id + '">' + thumbHtml(e.id) + '<div class="ev-body"><div class="row-between"><span class="t">' + esc(e.name) + '</span>' +
 						'<span class="pill ' + (e.isActive ? 'on' : 'off') + '">' + (e.isActive ? 'เปิดอยู่' : 'ปิดแล้ว') + '</span></div>' +
 						'<div class="s">สาขา ' + esc(e.branchCode) + ' · ของรางวัล ' + e.giftCount + ' อย่าง · แจกแล้ว ' + (e.items != null ? e.items : e.redeemed) + '/' + e.totalStock +
 						(e.duplicateAttempts ? ' · <span style="color:var(--red)">ซ้ำ ' + e.duplicateAttempts + '</span>' : '') + '</div>' +
-						'<div class="s">' + (e.lastActivity ? 'ล่าสุด ' + esc(e.lastActivity) : 'สร้างเมื่อ ' + esc(e.createdAt)) + '</div></button>';
+						'<div class="s">' + (e.lastActivity ? 'ล่าสุด ' + esc(e.lastActivity) : 'สร้างเมื่อ ' + esc(e.createdAt)) + '</div></div></button>';
 				}).join('');
+				loadThumbs($('event-list'));
 				$('event-list').querySelectorAll('.ev-card').forEach(function (b) {
 					b.addEventListener('click', function () { openAdminEvent(Number(b.dataset.id)); });
 				});
@@ -1291,7 +1321,7 @@
 			'auth.login': 'เข้าสู่ระบบ', 'user.register': 'สมัครใช้งาน', 'user.approve': 'อนุมัติผู้ใช้', 'user.reject': 'ปฏิเสธผู้ใช้',
 			'user.disable': 'ระงับผู้ใช้', 'user.enable': 'เปิดใช้ผู้ใช้', 'user.update': 'เปลี่ยนสิทธิ์ผู้ใช้', 'user.reset_pin': 'รีเซ็ต PIN',
 			'user.change_pin': 'เปลี่ยน PIN ตัวเอง', 'event.create': 'สร้าง Event', 'event.update': 'แก้ Event',
-			'gift.create': 'เพิ่มของรางวัล', 'gift.update': 'แก้ของรางวัล', 'gift.delete': 'ลบของรางวัล', 'redemption.void': 'ยกเลิกรายการแลก', 'event.clear_test': 'ล้างข้อมูลทดสอบ'
+			'gift.create': 'เพิ่มของรางวัล', 'gift.update': 'แก้ของรางวัล', 'gift.delete': 'ลบของรางวัล', 'redemption.void': 'ยกเลิกรายการแลก', 'event.clear_test': 'ล้างข้อมูลทดสอบ', 'event.cover': 'เปลี่ยนรูปปก Event'
 		};
 		const AUDIT_FIELDS = {
 			event_name: 'ชื่อ Event', branch_code: 'รหัสสาขา', is_active: 'เปิดใช้งาน', use_member: 'ช่องรหัสสมาชิก', use_bill_no: 'ช่องเลขที่บิล',
@@ -1319,6 +1349,7 @@
 			if (r.action === 'event.create') return esc(d.event_name) + ' · สาขา ' + esc(d.branch_code);
 			if (r.action === 'gift.create') return esc(d.gift_name) + ' × ' + esc(d.stock) + (d.image ? ' (มีรูป)' : '');
 			if (r.action === 'gift.delete') return esc(d.gift_name);
+			if (r.action === 'event.cover') return esc(d._name || '') + ' · ' + (d.cover ? 'ใส่รูปปกใหม่' : 'ลบรูปปก');
 			if (r.action === 'event.clear_test') return esc(d._name || '') + ' · ลบ ' + esc(d.rows) + ' รายการ' + (d.photos ? ' · รูป ' + esc(d.photos) + ' รูป' : '');
 			if (r.action === 'redemption.void') {
 				return [d.memberId ? 'สมาชิก ' + esc(d.memberId) : null, d.billNo ? 'บิล ' + esc(d.billNo) : null, d.billAmount != null ? '฿' + money(d.billAmount) : null].filter(Boolean).join(' · ') +
@@ -1347,6 +1378,9 @@
 		async function openEditor(eventId) {
 			$('ed-err').textContent = '';
 			ED.removed = [];
+			ED.coverNew = null; ED.coverRemove = false;
+			if (eventId != null && !Object.keys(THUMBS).length) await loadThumbs();
+			ED.cover = eventId != null && THUMBS[eventId] && THUMBS[eventId].isCover ? THUMBS[eventId].image : null;
 			if (eventId == null) {
 				ED.event = null;
 				ED.gifts = [{ id: null, name: '', stock: '', used: 0, image: null, hasImage: false }];
@@ -1387,6 +1421,7 @@
 			}
 			syncEditorChecks();
 			renderTierRows();
+			renderCover();
 			renderGiftRows();
 			showView('view-admin-edit');
 		}
@@ -1519,6 +1554,20 @@
 			});
 		}
 
+		// รูปปก Event
+		function renderCover() {
+			const img = ED.coverRemove ? null : (ED.coverNew || ED.cover);
+			$('ed-cover').innerHTML = img ? '<img src="' + img + '" alt="">' : '📷 แตะเพื่อใส่รูปปก';
+			$('ed-cover-acts').classList.toggle('hidden', !img);
+		}
+		function removeCover() { ED.coverNew = null; ED.coverRemove = true; renderCover(); }
+		$('ed-cover-file').addEventListener('change', async function () {
+			const f = this.files && this.files[0];
+			if (!f) return;
+			try { ED.coverNew = await resizeImage(f, 800, 550000); ED.coverRemove = false; renderCover(); }
+			catch (e) { alertModal(e.message); }
+		});
+
 		$('ed-file').addEventListener('change', async function () {
 			const f = this.files && this.files[0];
 			if (!f || ED.pickIdx == null) return;
@@ -1559,6 +1608,13 @@
 					tiers: ED.tiers.filter(function (t) { return String(t.min).trim() !== '' || String(t.qty).trim() !== ''; })
 				} });
 				ED.event = ev;
+
+				if (ED.coverNew || (ED.coverRemove && ED.cover)) {
+					btn.textContent = 'กำลังบันทึกรูปปก...';
+					await rpc('admin_set_event_cover', { p_event_id: ev.id, p_image: ED.coverNew || null });
+					THUMBS[ev.id] = ED.coverNew ? { image: ED.coverNew, isCover: true } : undefined;
+					ED.cover = ED.coverNew; ED.coverNew = null; ED.coverRemove = false;
+				}
 
 				for (let i = 0; i < ED.removed.length; i++) {
 					await rpc('admin_delete_gift', { p_gift_id: ED.removed[i] });
