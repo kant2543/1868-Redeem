@@ -10,10 +10,10 @@
 		* { box-sizing:border-box; }
 		body { margin:0; font-family:'IBM Plex Sans Thai',sans-serif; background:var(--bg); color:var(--ink); }
 		header { background:var(--green); color:#fff; padding:12px 16px; display:flex; justify-content:space-between; align-items:center; gap:8px; position:sticky; top:0; z-index:5; }
-		header h1 { font-size:17px; margin:0; line-height:1.25; }
-		header h1 small { display:block; font-size:12px; font-weight:400; opacity:.85; }
+		header h1 { font-size:16px; margin:0; line-height:1.25; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+		header h1 small { display:block; font-size:12px; font-weight:400; opacity:.85; overflow:hidden; text-overflow:ellipsis; }
 		header .actions { display:flex; gap:6px; flex-shrink:0; }
-		header button { background:rgba(255,255,255,.2); color:#fff; border:0; border-radius:8px; padding:6px 10px; font:inherit; font-size:13px; }
+		header button { background:rgba(255,255,255,.2); color:#fff; border:0; border-radius:8px; padding:6px 8px; font:inherit; font-size:13px; white-space:nowrap; }
 		header button.on { background:#fff; color:var(--green); }
 		main { padding:14px; max-width:560px; margin:0 auto; }
 		.card { background:#fff; border-radius:14px; padding:14px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
@@ -123,6 +123,23 @@
 		.chip { border:1px solid #e3c2c4; background:#fff; color:var(--red); border-radius:8px; padding:4px 10px; font:inherit; font-size:12px; }
 		.chip.g { border-color:#d6dcd9; color:var(--muted); }
 
+		/* บัญชีผู้ใช้ / ประวัติ */
+		.admin-nav { display:grid; grid-template-columns:1.2fr 1fr 1fr; gap:8px; margin-bottom:12px; }
+		.admin-nav .btn { margin:0; font-size:14px; padding:12px 6px; position:relative; }
+		.dot { position:absolute; top:6px; right:8px; min-width:18px; height:18px; border-radius:9px; background:var(--red); color:#fff; font-size:11px; line-height:18px; padding:0 5px; }
+		.u-row { padding:10px 0; border-bottom:1px solid #eef1ef; }
+		.u-row .n { font-weight:700; }
+		.u-row .s { font-size:12px; color:var(--muted); }
+		.u-row .acts { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+		.chip.ok { border-color:#b9dfc7; color:#00782a; }
+		.pill.admin { background:#e8efff; color:#2752c9; }
+		.pill.user { background:#eef1ef; color:#555; }
+		.au-row { padding:8px 0; border-bottom:1px solid #f0f3f1; font-size:13px; }
+		.au-row .h { display:flex; justify-content:space-between; gap:8px; }
+		.au-row .a { font-weight:700; }
+		.au-row .d { color:var(--muted); margin-top:2px; }
+		.au-row .who { color:var(--green); font-weight:600; }
+
 		/* หลายบิล */
 		.btn-sm { padding:9px !important; font-size:14px !important; margin-top:8px !important; }
 		.bill-head, .bill-row { display:grid; gap:8px; align-items:center; }
@@ -183,27 +200,59 @@
 	</header>
 
 	<main>
-		<!-- ===== PIN ===== -->
-		<div class="card" id="view-pin">
-			<label>รหัสสาขา / PIN Admin</label>
-			<input id="pin" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="กรอกรหัส">
-			<button class="btn btn-primary" id="btn-pin" onclick="login()">เข้าใช้งาน</button>
-			<div class="err" id="err-pin"></div>
+		<!-- ===== LOGIN ===== -->
+		<div id="view-login">
+			<div class="card">
+				<div class="field">
+					<label>Username</label>
+					<input id="li-user" class="sm-input" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="เช่น nid">
+				</div>
+				<div class="field">
+					<label>PIN</label>
+					<input id="li-pin" class="sm-input" type="password" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="PIN">
+				</div>
+				<button class="btn btn-primary" id="btn-login" onclick="login()">เข้าสู่ระบบ</button>
+				<div class="err" id="err-login"></div>
+			</div>
+			<button class="btn btn-ghost" onclick="showView('view-register')">ยังไม่มีบัญชี? สมัครใช้งาน</button>
+		</div>
+
+		<!-- ===== REGISTER ===== -->
+		<div id="view-register" class="hidden">
+			<div class="card">
+				<div style="font-size:17px;font-weight:700;margin-bottom:6px">สมัครใช้งาน</div>
+				<div class="hint" style="margin-bottom:10px">สมัครแล้วต้องรอ Admin อนุมัติก่อนเข้าใช้งาน</div>
+				<div class="field"><label>ชื่อ-นามสกุล / ชื่อเล่น (แสดงในรายการ)</label><input id="rg-name" class="sm-input" placeholder="เช่น นิด สมใจ"></div>
+				<div class="field"><label>Username (a-z 0-9 . _ 3-20 ตัว)</label><input id="rg-user" class="sm-input" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="เช่น nid"></div>
+				<div class="field"><label>PIN (4-20 ตัว)</label><input id="rg-pin" class="sm-input" type="password" autocomplete="new-password" placeholder="PIN"></div>
+				<div class="field"><label>ยืนยัน PIN</label><input id="rg-pin2" class="sm-input" type="password" autocomplete="new-password" placeholder="PIN อีกครั้ง"></div>
+				<button class="btn btn-primary" id="btn-register" onclick="doRegister()">ส่งคำขอสมัคร</button>
+				<div class="err" id="err-register"></div>
+			</div>
+			<button class="btn btn-ghost" onclick="showView('view-login')">← กลับไปหน้าเข้าสู่ระบบ</button>
+		</div>
+
+		<!-- ===== USER: ใส่รหัสสาขา ===== -->
+		<div id="view-branch" class="hidden">
+			<div class="card">
+				<label>รหัสสาขา</label>
+				<input id="br-code" inputmode="numeric" autocomplete="off" placeholder="เช่น 05432">
+				<button class="btn btn-primary" id="btn-branch" onclick="submitBranch()">ไปต่อ</button>
+				<div class="err" id="err-branch"></div>
+			</div>
+			<button class="btn btn-ghost" onclick="openChangePin()">🔑 เปลี่ยน PIN ของฉัน</button>
 		</div>
 
 		<!-- ===== STAFF: เลือก Event (สาขาที่เปิดหลาย Event) ===== -->
 		<div id="view-staff-pick" class="hidden">
 			<div class="lbl" id="pick-title" style="margin-bottom:8px"></div>
 			<div id="pick-list"></div>
+			<button class="btn btn-ghost" onclick="showBranchView()">⇄ เปลี่ยนสาขา</button>
 		</div>
 
 		<!-- ===== STAFF ===== -->
 		<div id="view-staff" class="hidden">
-			<div class="card">
-				<label>ชื่อพนักงาน (จำไว้ในเครื่องนี้)</label>
-				<input id="staff" class="sm-input" placeholder="เช่น สมชาย" onchange="saveStaff()">
-			</div>
-
+			<div class="hint" id="staff-who" style="margin:0 2px 8px"></div>
 			<div class="card" id="step-input">
 				<div id="input-fields"></div>
 				<button class="btn btn-primary" id="btn-check" onclick="check()">ตรวจสอบ</button>
@@ -231,8 +280,30 @@
 
 		<!-- ===== ADMIN: รายการ Event ===== -->
 		<div id="view-admin-list" class="hidden">
-			<button class="btn btn-primary" style="margin:0 0 12px" onclick="openEditor(null)">+ สร้าง Event ใหม่</button>
+			<div class="admin-nav">
+				<button class="btn btn-primary" onclick="openEditor(null)">+ สร้าง Event</button>
+				<button class="btn btn-ghost" onclick="showUsers()">👥 ผู้ใช้<span class="dot hidden" id="pending-dot"></span></button>
+				<button class="btn btn-ghost" onclick="showAudit()">📜 ประวัติ</button>
+			</div>
 			<div id="event-list"><div class="card muted">กำลังโหลด...</div></div>
+		</div>
+
+		<!-- ===== ADMIN: ผู้ใช้ ===== -->
+		<div id="view-admin-users" class="hidden">
+			<div class="row-between" style="margin-bottom:10px">
+				<button class="chip g" onclick="showAdminList()">← Event ทั้งหมด</button>
+				<button class="chip g" onclick="openChangePin()">🔑 เปลี่ยน PIN ของฉัน</button>
+			</div>
+			<div id="users-body"><div class="card muted">กำลังโหลด...</div></div>
+		</div>
+
+		<!-- ===== ADMIN: ประวัติทั้งระบบ ===== -->
+		<div id="view-admin-audit" class="hidden">
+			<div class="row-between" style="margin-bottom:10px">
+				<button class="chip g" onclick="showAdminList()">← Event ทั้งหมด</button>
+				<label class="check" style="padding:0;font-size:13px"><input type="checkbox" id="audit-hide-login" checked onchange="showAudit()"> ซ่อนการเข้าสู่ระบบ</label>
+			</div>
+			<div class="card"><div id="audit-body" class="muted">กำลังโหลด...</div></div>
 		</div>
 
 		<!-- ===== ADMIN: Event ===== -->
@@ -254,6 +325,7 @@
 			<div class="tabs">
 				<button class="tab on" data-tab="summary" onclick="adminTab('summary')">สรุป</button>
 				<button class="tab" data-tab="log" onclick="adminTab('log')">รายการ</button>
+				<button class="tab" data-tab="history" onclick="adminTab('history')">ประวัติ</button>
 				<button class="tab" data-tab="settings" onclick="adminTab('settings')">ตั้งค่า</button>
 			</div>
 			<div id="ae-body"></div>
@@ -319,9 +391,10 @@
 		// ============================
 
 		const LOW_STOCK = 10; // เหลือ ≤ 10 → เตือนสีเหลือง
-		const VIEWS = ['view-pin', 'view-staff-pick', 'view-staff', 'view-staff-summary', 'view-admin-list', 'view-admin-event', 'view-admin-edit'];
+		const VIEWS = ['view-login', 'view-register', 'view-branch', 'view-staff-pick', 'view-staff', 'view-staff-summary', 'view-admin-list', 'view-admin-users', 'view-admin-audit', 'view-admin-event', 'view-admin-edit'];
 
-		let pin = '';
+		let pin = '';               // session token (ส่งในช่อง p_pin ของทุก API)
+		let me = null;              // ผู้ใช้ที่ login อยู่
 		let role = null;
 		let images = {};            // gift_id → data URL
 		const S = { event: null, input: null, branch: null, events: [] }; // staff state (admin ใช้ตอนเข้าหน้าแลก)
@@ -339,8 +412,7 @@
 		}
 		function money(n) { return Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
 		function showView(id) { VIEWS.forEach(function (v) { $(v).classList.toggle('hidden', v !== id); }); window.scrollTo(0, 0); }
-		function staffName() { return $('staff').value.trim(); }
-		function saveStaff() { store('gift_staff', staffName()); }
+		function staffName() { return me ? me.name : ''; }
 		function setErr(msg) { $('err').textContent = msg || ''; }
 
 		async function rpc(fn, args) {
@@ -361,7 +433,8 @@
 		}
 
 		function handleError(e, target) {
-			if (e.code === '28000') { logout(); $('err-pin').textContent = e.message; return; }
+			if (e.code === '28000') { logout(true); $('err-login').textContent = e.message; return; }
+			if (e.code === '22023' && role !== 'admin') { showBranchView(e.message); return; }
 			if (target) target.textContent = e.message; else alertModal(e.message);
 		}
 
@@ -396,40 +469,118 @@
 			return g.remaining <= 0 ? 'out' : g.remaining <= lowAt ? 'low' : '';
 		}
 
-		/* ---------- login ---------- */
+		/* ---------- login / สมัคร / logout ---------- */
 		async function login() {
-			pin = $('pin').value.trim();
-			$('err-pin').textContent = '';
-			$('btn-pin').disabled = true;
+			const u = $('li-user').value.trim(), p = $('li-pin').value;
+			$('err-login').textContent = '';
+			if (!u || !p) { $('err-login').textContent = 'กรุณากรอก Username และ PIN'; return; }
+			$('btn-login').disabled = true;
 			try {
-				const r = await rpc('app_login');
-				role = r.role;
-				store('gift_pin', pin);
-				if (role === 'admin') await startAdmin();
+				const r = await rpc('auth_login', { p_username: u, p_pin: p });
+				if (!r.ok) { $('err-login').textContent = r.message; }
 				else {
-					S.branch = r.branchCode;
-					S.events = r.events;
-					if (r.events.length === 1) await startStaff(r.events[0]);
-					else showEventPicker();
+					pin = r.token;
+					store('gift_token', pin);
+					store('gift_user', u);
+					$('li-pin').value = '';
+					await routeAfterAuth();
 				}
-			} catch (e) {
-				$('err-pin').textContent = e.message;
-				pin = '';
-			}
-			$('btn-pin').disabled = false;
+			} catch (e) { $('err-login').textContent = e.message; }
+			$('btn-login').disabled = false;
 		}
 
-		function logout() {
-			store('gift_pin', null);
-			pin = ''; role = null; images = {};
-			$('pin').value = '';
+		async function doRegister() {
+			const err = $('err-register');
+			err.textContent = '';
+			if ($('rg-pin').value !== $('rg-pin2').value) { err.textContent = 'PIN ทั้ง 2 ช่องไม่ตรงกัน'; return; }
+			$('btn-register').disabled = true;
+			try {
+				await rpc('auth_register', { p_username: $('rg-user').value.trim(), p_display_name: $('rg-name').value.trim(), p_pin: $('rg-pin').value });
+				$('li-user').value = $('rg-user').value.trim().toLowerCase();
+				['rg-name', 'rg-user', 'rg-pin', 'rg-pin2'].forEach(function (id) { $(id).value = ''; });
+				showView('view-login');
+				$('err-login').innerHTML = '<span style="color:var(--green)">✅ ส่งคำขอแล้ว รอ Admin อนุมัติ แล้วเข้าสู่ระบบได้เลย</span>';
+			} catch (e) { err.textContent = e.message; }
+			$('btn-register').disabled = false;
+		}
+
+		// หลัง login / เปิดแอปใหม่: Admin → หน้า Admin, User → สาขาที่เลือกไว้ / ใส่รหัสสาขา
+		async function routeAfterAuth() {
+			const r = await rpc('auth_me');
+			me = r.user;
+			role = me.role === 'admin' ? 'admin' : 'staff';
+			if (role === 'admin') return startAdmin();
+			if (r.branchCode) {
+				try {
+					const a = await rpc('app_login');
+					return enterBranch(a);
+				} catch (e) { return showBranchView(e.code === '22023' ? e.message : ''); }
+			}
+			showBranchView();
+		}
+
+		function logout(silent) {
+			if (pin && !silent) rpc('auth_logout').catch(function () {});
+			store('gift_token', null);
+			pin = ''; role = null; me = null; images = {};
 			$('hdr-staff').classList.add('hidden');
 			$('hdr-admin').classList.add('hidden');
 			$('btn-summary').classList.remove('on');
 			$('hdr-title').innerHTML = '🎁 แลกของแถม';
 			S.event = null; S.events = []; S.branch = null;
 			closeModal();
-			showView('view-pin');
+			$('li-user').value = load('gift_user');
+			$('err-login').textContent = '';
+			showView('view-login');
+		}
+
+		/* ---------- user: ใส่รหัสสาขา ---------- */
+		function showBranchView(msg) {
+			$('hdr-title').innerHTML = '🎁 แลกของแถม<small>' + esc(me ? me.name : '') + '</small>';
+			$('hdr-staff').classList.add('hidden');
+			$('hdr-admin').classList.remove('hidden');
+			$('err-branch').textContent = msg || '';
+			$('br-code').value = S.branch || '';
+			showView('view-branch');
+		}
+
+		async function submitBranch() {
+			const code = $('br-code').value.trim();
+			$('err-branch').textContent = '';
+			if (!code) { $('err-branch').textContent = 'กรุณาใส่รหัสสาขา'; return; }
+			$('btn-branch').disabled = true;
+			try { enterBranch(await rpc('session_set_branch', { p_branch: code })); }
+			catch (e) { if (e.code === '28000') handleError(e); else $('err-branch').textContent = e.message; }
+			$('btn-branch').disabled = false;
+		}
+
+		function enterBranch(a) {
+			S.branch = a.branchCode;
+			S.events = a.events;
+			if (a.events.length === 1) startStaff(a.events[0]);
+			else showEventPicker();
+		}
+
+		/* ---------- เปลี่ยน PIN ของตัวเอง ---------- */
+		function openChangePin() {
+			const m = $('modal');
+			m.innerHTML = '<div class="modal" style="text-align:left"><h3 style="margin-top:0">เปลี่ยน PIN ของฉัน</h3>' +
+				'<div class="field"><label>PIN เดิม</label><input id="cp-old" class="sm-input" type="password"></div>' +
+				'<div class="field"><label>PIN ใหม่ (4-20 ตัว)</label><input id="cp-new" class="sm-input" type="password"></div>' +
+				'<div class="field"><label>ยืนยัน PIN ใหม่</label><input id="cp-new2" class="sm-input" type="password"></div>' +
+				'<div class="err" id="cp-err"></div>' +
+				'<div class="btns"><button class="btn btn-ghost" id="m-cancel">ยกเลิก</button><button class="btn btn-primary" id="m-ok">บันทึก</button></div>' +
+				'<div class="hint">เปลี่ยนแล้ว เครื่องอื่นที่ login ไว้จะถูกออกจากระบบ</div></div>';
+			m.classList.remove('hidden');
+			$('m-cancel').onclick = closeModal;
+			$('m-ok').onclick = async function () {
+				if ($('cp-new').value !== $('cp-new2').value) { $('cp-err').textContent = 'PIN ใหม่ 2 ช่องไม่ตรงกัน'; return; }
+				$('m-ok').disabled = true;
+				try {
+					await rpc('auth_change_pin', { p_old_pin: $('cp-old').value, p_new_pin: $('cp-new').value });
+					closeModal(); alertModal('เปลี่ยน PIN แล้ว');
+				} catch (e) { $('cp-err').textContent = e.message; $('m-ok').disabled = false; }
+			};
 		}
 
 		/* ---------- staff: เลือก Event ---------- */
@@ -437,7 +588,7 @@
 			// โหลดรายการใหม่ทุกครั้ง เผื่อ Admin เพิ่ม/ปิด Event ระหว่างวัน
 			try { const r = await rpc('app_login'); S.events = r.events; S.branch = r.branchCode; }
 			catch (e) { handleError(e); return; }
-			$('hdr-title').innerHTML = '🎁 แลกของแถม<small>สาขา ' + esc(S.branch) + '</small>';
+			$('hdr-title').innerHTML = '🎁 แลกของแถม<small>สาขา ' + esc(S.branch) + ' · ' + esc(me ? me.name : '') + '</small>';
 			$('hdr-staff').classList.add('hidden');
 			$('hdr-admin').classList.remove('hidden');
 			$('pick-title').textContent = 'สาขา ' + S.branch + ' มี ' + S.events.length + ' Event ที่เปิดอยู่ — เลือก Event';
@@ -463,7 +614,7 @@
 			$('hdr-staff').classList.add('hidden');
 			$('hdr-admin').classList.remove('hidden');
 			$('btn-summary').classList.remove('on');
-			$('hdr-title').innerHTML = '🎁 แลกของแถม<small>Admin</small>';
+			$('hdr-title').innerHTML = '🎁 แลกของแถม<small>Admin · ' + esc(me.name) + '</small>';
 			A.tab = 'log';
 			openAdminEvent(S.event.id);
 		}
@@ -473,14 +624,15 @@
 		   ===================================================== */
 		async function startStaff(event) {
 			S.event = event;
-			$('hdr-title').innerHTML = '🎁 ' + esc(event.name) + '<small>สาขา ' + esc(event.branchCode) + '</small>';
+			$('hdr-title').innerHTML = '🎁 ' + esc(event.name) + '<small>สาขา ' + esc(event.branchCode) + ' · ' + esc(me ? me.name : '') + '</small>';
 			$('hdr-staff').classList.remove('hidden');
+			$('hdr-admin').classList.add('hidden');
 			const isAdmin = role === 'admin';
 			$('btn-back-admin').classList.toggle('hidden', !isAdmin);
-			$('btn-switch').classList.toggle('hidden', isAdmin || S.events.length < 2);
+			$('btn-switch').classList.toggle('hidden', isAdmin);
 			['btn-summary', 'btn-csv-staff', 'btn-logout-staff'].forEach(function (id) { $(id).classList.toggle('hidden', isAdmin); });
 			$('btn-summary').classList.remove('on');
-			$('staff').value = load('gift_staff') || (isAdmin ? 'Admin' : '');
+			$('staff-who').textContent = 'ผู้บันทึก: ' + staffName() + ' (บันทึกอัตโนมัติจากบัญชีที่เข้าสู่ระบบ)';
 			buildInputFields();
 			showView('view-staff');
 			resetStaff();
@@ -919,13 +1071,18 @@
 		   ADMIN
 		   ===================================================== */
 		async function startAdmin() {
-			$('hdr-title').innerHTML = '🎁 แลกของแถม<small>Admin</small>';
+			$('hdr-title').innerHTML = '🎁 แลกของแถม<small>Admin · ' + esc(me.name) + '</small>';
 			$('hdr-admin').classList.remove('hidden');
 			await showAdminList();
 		}
 
 		async function showAdminList() {
 			showView('view-admin-list');
+			rpc('admin_list_users').then(function (us) {
+				const n = us.filter(function (u) { return u.status === 'pending'; }).length;
+				$('pending-dot').textContent = n;
+				$('pending-dot').classList.toggle('hidden', !n);
+			}).catch(function () {});
 			try {
 				const list = await rpc('admin_list_events');
 				if (!list.length) { $('event-list').innerHTML = '<div class="card muted">ยังไม่มี Event — กดสร้างด้านบน</div>'; return; }
@@ -966,6 +1123,11 @@
 			document.querySelectorAll('.tab').forEach(function (t) { t.classList.toggle('on', t.dataset.tab === tab); });
 			if (tab === 'settings') { openEditor(A.eventId); return; }
 			try {
+				if (tab === 'history') {
+					$('ae-body').innerHTML = '<div class="card"><div id="ae-audit" class="muted">กำลังโหลด...</div></div>';
+					renderAudit($('ae-audit'), await rpc('admin_audit_log', { p_event_id: A.eventId, p_limit: 200 }), false);
+					return;
+				}
 				if (tab === 'summary') {
 					const s = await rpc('event_summary', { p_event_id: A.eventId });
 					renderAdminHeader(s.event);
@@ -999,6 +1161,154 @@
 					adminTab('log');
 				} catch (e) { closeModal(); handleError(e); }
 			};
+		}
+
+		/* ---------- ADMIN: ผู้ใช้ ---------- */
+		async function showUsers() {
+			showView('view-admin-users');
+			$('users-body').innerHTML = '<div class="card muted">กำลังโหลด...</div>';
+			try { renderUsers(await rpc('admin_list_users')); } catch (e) { handleError(e); }
+		}
+
+		function renderUsers(users) {
+			const pending = users.filter(function (u) { return u.status === 'pending'; });
+			const active = users.filter(function (u) { return u.status === 'active'; });
+			const disabled = users.filter(function (u) { return u.status === 'disabled'; });
+			const nAdmin = active.filter(function (u) { return u.role === 'admin'; }).length;
+			const rolePill = function (u) { return '<span class="pill ' + u.role + '">' + (u.role === 'admin' ? 'Admin' : 'User') + '</span>'; };
+			const head = function (u) {
+				return '<div class="row-between"><span><span class="n">' + esc(u.name) + '</span> <span class="muted">@' + esc(u.username) + '</span></span>' + rolePill(u) + '</div>';
+			};
+			let html = '';
+			html += '<div class="card"><label>รออนุมัติ (' + pending.length + ')</label>' + (pending.length ? pending.map(function (u) {
+				return '<div class="u-row">' + head(u) + '<div class="s">สมัครเมื่อ ' + esc(u.createdAt) + '</div>' +
+					'<div class="acts"><button class="chip ok" data-act="approve-user" data-id="' + u.id + '">✓ อนุมัติเป็น User</button>' +
+					'<button class="chip ok" data-act="approve-admin" data-id="' + u.id + '">✓ อนุมัติเป็น Admin</button>' +
+					'<button class="chip" data-act="reject" data-id="' + u.id + '">✕ ปฏิเสธ</button></div></div>';
+			}).join('') : '<div class="muted">ไม่มีคำขอ</div>') + '</div>';
+
+			html += '<div class="card"><label>ใช้งานอยู่ (' + active.length + ' · Admin ' + nAdmin + ')</label>' + active.map(function (u) {
+				const self = me && u.id === me.id;
+				return '<div class="u-row">' + head(u) + '<div class="s">' + (u.lastLoginAt ? 'เข้าใช้ล่าสุด ' + esc(u.lastLoginAt) : 'ยังไม่เคยเข้าใช้') +
+					(u.approvedBy ? ' · อนุมัติโดย ' + esc(u.approvedBy) : '') + (self ? ' · (คุณ)' : '') + '</div>' +
+					(self ? '' : '<div class="acts">' +
+						(u.role === 'admin' ? '<button class="chip g" data-act="to-user" data-id="' + u.id + '">เปลี่ยนเป็น User</button>'
+							: '<button class="chip g" data-act="to-admin" data-id="' + u.id + '">เปลี่ยนเป็น Admin</button>') +
+						'<button class="chip g" data-act="reset" data-id="' + u.id + '">🔑 รีเซ็ต PIN</button>' +
+						'<button class="chip" data-act="disable" data-id="' + u.id + '">ระงับ</button></div>') + '</div>';
+			}).join('') + '</div>';
+
+			if (disabled.length) {
+				html += '<div class="card"><label>ระงับแล้ว (' + disabled.length + ')</label>' + disabled.map(function (u) {
+					return '<div class="u-row">' + head(u) + '<div class="acts"><button class="chip ok" data-act="enable" data-id="' + u.id + '">เปิดใช้อีกครั้ง</button></div></div>';
+				}).join('') + '</div>';
+			}
+			$('users-body').innerHTML = html;
+			$('users-body').querySelectorAll('[data-act]').forEach(function (b) {
+				const u = users.filter(function (x) { return x.id === Number(b.dataset.id); })[0];
+				b.addEventListener('click', function () { userAction(b.dataset.act, u); });
+			});
+		}
+
+		async function userAction(act, u) {
+			const set = async function (status, roleName) {
+				try { await rpc('admin_set_user', { p_user_id: u.id, p_status: status, p_role: roleName }); showUsers(); }
+				catch (e) { handleError(e); }
+			};
+			if (act === 'approve-user') return set('active', 'user');
+			if (act === 'approve-admin') return confirmBox('อนุมัติ ' + u.name + ' เป็น Admin?', 'Admin สร้าง/แก้ Event, ยกเลิกรายการ และจัดการผู้ใช้ได้', function () { set('active', 'admin'); });
+			if (act === 'reject') return confirmBox('ปฏิเสธคำขอของ ' + u.name + '?', '', function () { set('disabled', u.role); });
+			if (act === 'to-admin') return confirmBox('เปลี่ยน ' + u.name + ' เป็น Admin?', '', function () { set('active', 'admin'); });
+			if (act === 'to-user') return confirmBox('เปลี่ยน ' + u.name + ' เป็น User?', '', function () { set('active', 'user'); });
+			if (act === 'disable') return confirmBox('ระงับ ' + u.name + '?', 'จะถูกออกจากระบบทันที และเข้าใช้ไม่ได้จนกว่าจะเปิดใหม่', function () { set('disabled', u.role); });
+			if (act === 'enable') return set('active', u.role);
+			if (act === 'reset') {
+				const m = $('modal');
+				m.innerHTML = '<div class="modal" style="text-align:left"><h3 style="margin-top:0">รีเซ็ต PIN: ' + esc(u.name) + '</h3>' +
+					'<div class="field"><label>PIN ใหม่ (4-20 ตัว)</label><input id="rp-new" class="sm-input" type="text" autocomplete="off"></div>' +
+					'<div class="err" id="rp-err"></div><div class="hint">แจ้ง PIN ใหม่ให้เจ้าของบัญชี แล้วให้เปลี่ยนเองภายหลัง</div>' +
+					'<div class="btns"><button class="btn btn-ghost" id="m-cancel">ยกเลิก</button><button class="btn btn-primary" id="m-ok">รีเซ็ต</button></div></div>';
+				m.classList.remove('hidden');
+				$('m-cancel').onclick = closeModal;
+				$('m-ok').onclick = async function () {
+					try { await rpc('admin_reset_pin', { p_user_id: u.id, p_new_pin: $('rp-new').value }); closeModal(); alertModal('รีเซ็ต PIN ของ ' + u.name + ' แล้ว'); }
+					catch (e) { $('rp-err').textContent = e.message; }
+				};
+			}
+		}
+
+		function confirmBox(title, sub, onYes) {
+			const m = $('modal');
+			m.innerHTML = '<div class="modal"><h3 style="margin-top:0">' + esc(title) + '</h3>' + (sub ? '<p class="muted" style="font-size:13px">' + esc(sub) + '</p>' : '') +
+				'<div class="btns"><button class="btn btn-ghost" id="m-cancel">ยกเลิก</button><button class="btn btn-primary" id="m-ok">ยืนยัน</button></div></div>';
+			m.classList.remove('hidden');
+			$('m-cancel').onclick = closeModal;
+			$('m-ok').onclick = function () { closeModal(); onYes(); };
+		}
+
+		/* ---------- ADMIN: ประวัติ (ใครทำอะไร) ---------- */
+		async function showAudit() {
+			showView('view-admin-audit');
+			$('audit-body').innerHTML = 'กำลังโหลด...';
+			try {
+				let rows = await rpc('admin_audit_log', { p_event_id: null, p_limit: 300 });
+				if ($('audit-hide-login').checked) rows = rows.filter(function (r) { return r.action !== 'auth.login'; });
+				renderAudit($('audit-body'), rows, true);
+			} catch (e) { handleError(e); }
+		}
+
+		const AUDIT_ACTIONS = {
+			'auth.login': 'เข้าสู่ระบบ', 'user.register': 'สมัครใช้งาน', 'user.approve': 'อนุมัติผู้ใช้', 'user.reject': 'ปฏิเสธผู้ใช้',
+			'user.disable': 'ระงับผู้ใช้', 'user.enable': 'เปิดใช้ผู้ใช้', 'user.update': 'เปลี่ยนสิทธิ์ผู้ใช้', 'user.reset_pin': 'รีเซ็ต PIN',
+			'user.change_pin': 'เปลี่ยน PIN ตัวเอง', 'event.create': 'สร้าง Event', 'event.update': 'แก้ Event',
+			'gift.create': 'เพิ่มของรางวัล', 'gift.update': 'แก้ของรางวัล', 'gift.delete': 'ลบของรางวัล', 'redemption.void': 'ยกเลิกรายการแลก'
+		};
+		const AUDIT_FIELDS = {
+			event_name: 'ชื่อ Event', branch_code: 'รหัสสาขา', is_active: 'เปิดใช้งาน', use_member: 'ช่องรหัสสมาชิก', use_bill_no: 'ช่องเลขที่บิล',
+			use_bill_amount: 'ช่องยอดบิล', use_photos: 'อัปโหลดรูป', use_note: 'หมายเหตุ', dedup_member: 'กันซ้ำด้วยสมาชิก', dedup_bill: 'กันซ้ำด้วยบิล',
+			min_bill_amount: 'ยอดขั้นต่ำ', gift_name: 'ชื่อของรางวัล', stock: 'จำนวน', image: 'รูป', role: 'สิทธิ์', status: 'สถานะ'
+		};
+		function auditVal(k, v) {
+			if (v === null || v === undefined || v === '') return '-';
+			if (k === 'image') return v ? 'มีรูป' : 'ไม่มีรูป';
+			if (v === true) return 'เปิด';
+			if (v === false) return 'ปิด';
+			if (k === 'role') return v === 'admin' ? 'Admin' : 'User';
+			if (k === 'status') return ({ pending: 'รออนุมัติ', active: 'ใช้งาน', disabled: 'ระงับ' })[v] || v;
+			return String(v);
+		}
+		function auditDetail(r) {
+			const d = r.detail || {};
+			if (r.action === 'event.update' || r.action === 'gift.update') {
+				const parts = Object.keys(d).filter(function (k) { return k.charAt(0) !== '_' && AUDIT_FIELDS[k]; }).map(function (k) {
+					return AUDIT_FIELDS[k] + ': ' + esc(auditVal(k, d[k].from)) + ' → <b>' + esc(auditVal(k, d[k].to)) + '</b>';
+				});
+				return (d._name && r.action === 'gift.update' ? esc(d._name) + ' · ' : '') + parts.join(' · ');
+			}
+			if (r.action === 'event.create') return esc(d.event_name) + ' · สาขา ' + esc(d.branch_code);
+			if (r.action === 'gift.create') return esc(d.gift_name) + ' × ' + esc(d.stock) + (d.image ? ' (มีรูป)' : '');
+			if (r.action === 'gift.delete') return esc(d.gift_name);
+			if (r.action === 'redemption.void') {
+				return [d.memberId ? 'สมาชิก ' + esc(d.memberId) : null, d.billNo ? 'บิล ' + esc(d.billNo) : null, d.billAmount != null ? '฿' + money(d.billAmount) : null].filter(Boolean).join(' · ') +
+					' — แลกโดย ' + esc(d.redeemedBy || '-') + ' เมื่อ ' + esc(d.redeemedAt || '-');
+			}
+			if (r.action.indexOf('user.') === 0 && d.name) {
+				let t = esc(d.name) + (d.username ? ' @' + esc(d.username) : '');
+				if (d.role && d.role.from !== d.role.to) t += ' · สิทธิ์: ' + auditVal('role', d.role.from) + ' → <b>' + auditVal('role', d.role.to) + '</b>';
+				if (r.action === 'user.approve') t += ' · เป็น ' + auditVal('role', d.role && d.role.to);
+				return t;
+			}
+			return '';
+		}
+		function renderAudit(el, rows, showEvent) {
+			if (!rows.length) { el.innerHTML = '<div class="muted">ยังไม่มีประวัติ</div>'; return; }
+			el.classList.remove('muted');
+			el.innerHTML = rows.map(function (r) {
+				return '<div class="au-row"><div class="h"><span><span class="who">' + esc(r.user) + '</span> <span class="a">' + esc(AUDIT_ACTIONS[r.action] || r.action) + '</span></span>' +
+					'<span class="muted" style="white-space:nowrap">' + esc(r.ts.slice(0, 16)) + '</span></div>' +
+					(showEvent && r.eventName ? '<div class="d">📍 ' + esc(r.eventName) + '</div>' : '') +
+					'<div class="d">' + auditDetail(r) + '</div></div>';
+			}).join('');
 		}
 
 		/* ---------- ADMIN: editor ---------- */
@@ -1208,7 +1518,10 @@
 		}
 
 		/* ---------- init ---------- */
-		$('pin').addEventListener('keydown', function (e) { if (e.key === 'Enter') login(); });
+		$('li-pin').addEventListener('keydown', function (e) { if (e.key === 'Enter') login(); });
+		$('li-user').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('li-pin').focus(); });
+		$('br-code').addEventListener('keydown', function (e) { if (e.key === 'Enter') submitBranch(); });
+		$('rg-pin2').addEventListener('keydown', function (e) { if (e.key === 'Enter') doRegister(); });
 
 		// ให้ :active ทำงานบน iOS + สั่นเบาๆ บน Android
 		document.addEventListener('touchstart', function () {}, { passive: true });
@@ -1218,8 +1531,10 @@
 		});
 
 		(function init() {
-			const saved = load('gift_pin');
-			if (saved) { $('pin').value = saved; login(); }
+			store('gift_pin', null); // PIN แบบเก่า ไม่ใช้แล้ว
+			$('li-user').value = load('gift_user');
+			const saved = load('gift_token');
+			if (saved) { pin = saved; routeAfterAuth().catch(function (e) { handleError(e); }); }
 		})();
 	</script>
 </body>
