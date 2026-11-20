@@ -368,6 +368,7 @@
 				<label class="check" id="ed-dedup-member-row"><input type="checkbox" id="ed-dedup-member"> รหัสสมาชิก (1 คน รับได้ 1 ครั้ง)</label>
 				<label class="check" id="ed-dedup-bill-row"><input type="checkbox" id="ed-dedup-bill"> เลขที่บิล (1 บิล ใช้ได้ 1 ครั้ง)</label>
 				<div class="hint" id="ed-lock-hint"></div>
+				<button class="btn btn-ghost btn-sm hidden" id="ed-clear" onclick="clearTestData()">🧹 ล้างข้อมูลทดสอบ (ปลดล็อกการตั้งค่า)</button>
 			</div>
 
 			<div class="card">
@@ -1261,7 +1262,7 @@
 			'auth.login': 'เข้าสู่ระบบ', 'user.register': 'สมัครใช้งาน', 'user.approve': 'อนุมัติผู้ใช้', 'user.reject': 'ปฏิเสธผู้ใช้',
 			'user.disable': 'ระงับผู้ใช้', 'user.enable': 'เปิดใช้ผู้ใช้', 'user.update': 'เปลี่ยนสิทธิ์ผู้ใช้', 'user.reset_pin': 'รีเซ็ต PIN',
 			'user.change_pin': 'เปลี่ยน PIN ตัวเอง', 'event.create': 'สร้าง Event', 'event.update': 'แก้ Event',
-			'gift.create': 'เพิ่มของรางวัล', 'gift.update': 'แก้ของรางวัล', 'gift.delete': 'ลบของรางวัล', 'redemption.void': 'ยกเลิกรายการแลก'
+			'gift.create': 'เพิ่มของรางวัล', 'gift.update': 'แก้ของรางวัล', 'gift.delete': 'ลบของรางวัล', 'redemption.void': 'ยกเลิกรายการแลก', 'event.clear_test': 'ล้างข้อมูลทดสอบ'
 		};
 		const AUDIT_FIELDS = {
 			event_name: 'ชื่อ Event', branch_code: 'รหัสสาขา', is_active: 'เปิดใช้งาน', use_member: 'ช่องรหัสสมาชิก', use_bill_no: 'ช่องเลขที่บิล',
@@ -1288,6 +1289,7 @@
 			if (r.action === 'event.create') return esc(d.event_name) + ' · สาขา ' + esc(d.branch_code);
 			if (r.action === 'gift.create') return esc(d.gift_name) + ' × ' + esc(d.stock) + (d.image ? ' (มีรูป)' : '');
 			if (r.action === 'gift.delete') return esc(d.gift_name);
+			if (r.action === 'event.clear_test') return esc(d._name || '') + ' · ลบ ' + esc(d.rows) + ' รายการ' + (d.photos ? ' · รูป ' + esc(d.photos) + ' รูป' : '');
 			if (r.action === 'redemption.void') {
 				return [d.memberId ? 'สมาชิก ' + esc(d.memberId) : null, d.billNo ? 'บิล ' + esc(d.billNo) : null, d.billAmount != null ? '฿' + money(d.billAmount) : null].filter(Boolean).join(' · ') +
 					' — แลกโดย ' + esc(d.redeemedBy || '-') + ' เมื่อ ' + esc(d.redeemedAt || '-');
@@ -1374,7 +1376,21 @@
 			$('ed-dedup-member-row').classList.toggle('disabled', locked || !useM);
 			$('ed-dedup-bill-row').classList.toggle('disabled', locked || !useB);
 			$('ed-min-wrap').classList.toggle('hidden', !useA);
+			$('ed-clear').classList.toggle('hidden', !locked);
 			$('ed-lock-hint').textContent = locked ? '🔒 Event นี้มีการแลกแล้ว เปลี่ยนรหัสสมาชิก/เลขที่บิล/ยอดบิล/วิธีกันซ้ำไม่ได้ (หมายเหตุ รูป ชื่อ สาขา ยอดขั้นต่ำ และของรางวัลแก้ได้)' : '';
+		}
+
+		// ล้างรายการทดสอบ (ทำได้เมื่อทุกรายการถูกยกเลิกแล้ว) → Event กลับเป็นยังไม่มีการแลก
+		function clearTestData() {
+			confirmBox('ล้างข้อมูลทดสอบของ Event นี้?',
+				'ลบรายการที่ยกเลิกแล้วและรายการพยายามแลกซ้ำทั้งหมด (รวมบิลและรูป) ทำได้เฉพาะเมื่อไม่มีรายการแลกจริงเหลืออยู่ · การตั้งค่าที่ยังไม่ได้บันทึกในหน้านี้จะหาย',
+				async function () {
+					try {
+						const r = await rpc('admin_clear_test_data', { p_event_id: ED.event.id });
+						alertModal('ล้างแล้ว ' + r.rows + ' รายการ' + (r.photos ? ' · รูป ' + r.photos + ' รูป' : '') + ' — แก้การตั้งค่าได้ทุกช่องแล้ว');
+						openEditor(ED.event.id);
+					} catch (e) { handleError(e); }
+				});
 		}
 
 		function giftRowImg(g) {
