@@ -122,6 +122,48 @@
 		.gift-edit .acts { display:flex; justify-content:space-between; align-items:center; margin-top:6px; font-size:12px; }
 		.chip { border:1px solid #e3c2c4; background:#fff; color:var(--red); border-radius:8px; padding:4px 10px; font:inherit; font-size:12px; }
 		.chip.g { border-color:#d6dcd9; color:var(--muted); }
+
+		/* หลายบิล */
+		.btn-sm { padding:9px !important; font-size:14px !important; margin-top:8px !important; }
+		.bill-head, .bill-row { display:grid; gap:8px; align-items:center; }
+		.bill-head.c2, .bill-row.c2 { grid-template-columns:1fr 120px 30px; }
+		.bill-head.c1, .bill-row.c1 { grid-template-columns:1fr 30px; }
+		.bill-head { font-size:13px; color:var(--muted); margin-bottom:4px; }
+		.bill-head .num { text-align:right; }
+		.bill-row + .bill-row { margin-top:6px; }
+		.bill-row .bill-amt { text-align:right; }
+		.bill-del { border:0; background:#f1f3f2; color:#999; border-radius:8px; height:36px; font-size:13px; }
+		.bill-total { display:flex; justify-content:space-between; align-items:center; margin-top:10px; padding:10px 12px; background:#f0faf3; border-radius:10px; font-size:15px; }
+		.bill-total b { font-size:20px; color:var(--green); }
+		.hint.ok-text { color:var(--green); }
+		.hint.ok-text::after { content:' ✓ ครบแล้ว'; }
+		textarea { width:100%; font:inherit; font-size:15px; padding:9px 10px; border:2px solid #dde3e0; border-radius:10px; resize:vertical; }
+		textarea:focus { outline:none; border-color:var(--green); }
+		table.bills-tbl { width:100%; border-collapse:collapse; font-size:14px; margin:10px 0; }
+		table.bills-tbl td { padding:5px 4px; border-bottom:1px solid #eef1ef; text-align:left; }
+		table.bills-tbl .num { text-align:right; white-space:nowrap; }
+		table.bills-tbl tr.tot td { font-weight:700; border-bottom:0; border-top:2px solid #dde3e0; }
+		table.bills-tbl.on-dark { background:rgba(255,255,255,.14); border-radius:10px; }
+		table.bills-tbl.on-dark td { border-color:rgba(255,255,255,.25); padding:5px 10px; }
+		table.bills-tbl.on-dark tr.tot td { border-top-color:rgba(255,255,255,.6); }
+
+		/* รูปถ่าย */
+		.photo-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; }
+		.photo-grid .ph { position:relative; }
+		.photo-grid img { width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:8px; display:block; }
+		.photo-grid button { position:absolute; top:3px; right:3px; width:22px; height:22px; border-radius:50%; border:0; background:rgba(0,0,0,.6); color:#fff; font-size:11px; line-height:22px; padding:0; }
+		.photo-grid:empty { display:none; }
+
+		/* รายละเอียดรายการ */
+		.recent .row.clickable { cursor:pointer; }
+		.modal.detail { text-align:left; max-height:86vh; overflow:auto; }
+		.kv { display:flex; justify-content:space-between; gap:10px; padding:5px 0; font-size:14px; border-bottom:1px solid #f0f3f1; }
+		.kv span:first-child { color:var(--muted); }
+		.note-box { background:#fffbe6; border-radius:10px; padding:10px; font-size:14px; margin-top:8px; white-space:pre-wrap; }
+		.detail-photos { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:6px; }
+		.detail-photos img { width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:8px; cursor:zoom-in; }
+		.photo-view { position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:30; display:flex; align-items:center; justify-content:center; padding:10px; }
+		.photo-view img { max-width:100%; max-height:100%; border-radius:6px; }
 	</style>
 </head>
 <body>
@@ -242,9 +284,11 @@
 				<div class="lbl">ช่องที่ให้พนักงานกรอก</div>
 				<label class="check"><input type="checkbox" id="ed-use-member" onchange="syncEditorChecks()"> รหัสสมาชิก</label>
 				<label class="check"><input type="checkbox" id="ed-use-bill" onchange="syncEditorChecks()"> เลขที่บิล</label>
-				<label class="check"><input type="checkbox" id="ed-use-amount" onchange="syncEditorChecks()"> ยอดบิล</label>
+				<label class="check"><input type="checkbox" id="ed-use-amount" onchange="syncEditorChecks()"> ยอดบิล (กรอกได้หลายบิล รวมเป็น Total)</label>
+				<label class="check" id="ed-note-row"><input type="checkbox" id="ed-use-note"> หมายเหตุ</label>
+				<label class="check" id="ed-photo-row"><input type="checkbox" id="ed-use-photos"> อัปโหลดรูป (กี่รูปก็ได้)</label>
 				<div class="field hidden" id="ed-min-wrap">
-					<label>ยอดบิลขั้นต่ำ (บาท) — เว้นว่าง = ไม่กำหนด</label>
+					<label>ยอดรวม (Total) ขั้นต่ำ (บาท) — เว้นว่าง = ไม่กำหนด</label>
 					<input id="ed-min" class="sm-input" inputmode="decimal" placeholder="เช่น 300">
 				</div>
 
@@ -342,7 +386,7 @@
 			const parts = [];
 			if (x.memberId) parts.push('สมาชิก ' + esc(x.memberId));
 			if (x.billNo) parts.push('บิล ' + esc(x.billNo));
-			if (x.billAmount != null) parts.push('฿' + money(x.billAmount));
+			if (x.billAmount != null) parts.push((x.bills && x.bills.length > 1 ? 'รวม ' : '') + '฿' + money(x.billAmount));
 			return parts.join(' · ');
 		}
 
@@ -398,7 +442,7 @@
 			$('hdr-admin').classList.remove('hidden');
 			$('pick-title').textContent = 'สาขา ' + S.branch + ' มี ' + S.events.length + ' Event ที่เปิดอยู่ — เลือก Event';
 			$('pick-list').innerHTML = S.events.map(function (e) {
-				const fields = [e.useMember ? 'รหัสสมาชิก' : null, e.useBillNo ? 'เลขที่บิล' : null, e.useBillAmount ? 'ยอดบิล' : null].filter(Boolean).join(', ');
+				const fields = [e.useMember ? 'รหัสสมาชิก' : null, e.useBillNo ? 'เลขที่บิล' : null, e.useBillAmount ? 'ยอดบิล' : null, e.useNote ? 'หมายเหตุ' : null, e.usePhotos ? 'รูป' : null].filter(Boolean).join(', ');
 				return '<button class="ev-card" data-id="' + e.id + '"><div class="t">' + esc(e.name) + '</div>' +
 					'<div class="s">กรอก: ' + esc(fields) + (e.minBillAmount != null ? ' · ขั้นต่ำ ฿' + money(e.minBillAmount) : '') + '</div></button>';
 			}).join('');
@@ -444,27 +488,119 @@
 			await loadStaffDashboard();
 		}
 
+		function usesBills(e) { return e.useBillNo || e.useBillAmount; }
+
 		function buildInputFields() {
 			const e = S.event, f = [];
 			if (e.useMember) f.push('<div class="field"><label>รหัสสมาชิก</label><input id="in-member" inputmode="numeric" autocomplete="off" placeholder="กรอกรหัสสมาชิก"></div>');
-			if (e.useBillNo) f.push('<div class="field"><label>เลขที่บิล</label><input id="in-bill" autocomplete="off" autocapitalize="characters" placeholder="กรอกเลขที่บิล"></div>');
-			if (e.useBillAmount) f.push('<div class="field"><label>ยอดบิล (บาท)' + (e.minBillAmount != null ? ' — ขั้นต่ำ ' + money(e.minBillAmount) : '') + '</label><input id="in-amount" inputmode="decimal" autocomplete="off" placeholder="เช่น 350"></div>');
+			if (usesBills(e)) {
+				const head = (e.useBillNo ? '<span>เลขที่บิล</span>' : '') + (e.useBillAmount ? '<span class="num">ยอด (บาท)</span>' : '') + '<span></span>';
+				f.push('<div class="field"><div class="bill-head ' + billCols(e) + '">' + head + '</div>' +
+					'<div id="bill-rows"></div>' +
+					'<button type="button" class="btn btn-outline btn-sm" onclick="addBillRow(true)">+ เพิ่มบิล</button>' +
+					(e.useBillAmount ? '<div class="bill-total"><span>Total</span><b id="bill-total">฿0</b></div>' +
+						(e.minBillAmount != null ? '<div class="hint" id="bill-min">ขั้นต่ำ ฿' + money(e.minBillAmount) + '</div>' : '') : '') +
+					'</div>');
+			}
+			if (e.useNote) f.push('<div class="field"><label>หมายเหตุ</label><textarea id="in-note" rows="2" placeholder="ไม่บังคับ"></textarea></div>');
+			if (e.usePhotos) f.push('<div class="field"><label>รูปถ่าย (แนบได้หลายรูป)</label>' +
+				'<div class="photo-grid" id="photo-grid"></div>' +
+				'<button type="button" class="btn btn-outline btn-sm" onclick="$(\'in-photo-file\').click()">📷 ถ่าย / เลือกรูป</button>' +
+				'<input type="file" id="in-photo-file" accept="image/*" multiple class="hidden"></div>');
 			$('input-fields').innerHTML = f.join('');
-			// Enter → ช่องถัดไป / ตรวจสอบ
-			const inputs = $('input-fields').querySelectorAll('input');
-			inputs.forEach(function (inp, i) {
-				inp.addEventListener('keydown', function (ev) {
-					if (ev.key !== 'Enter') return;
-					if (i < inputs.length - 1) inputs[i + 1].focus(); else check();
+
+			S.photos = [];
+			if (usesBills(e)) addBillRow(false);
+			if (e.usePhotos) {
+				$('in-photo-file').addEventListener('change', async function () {
+					const files = Array.prototype.slice.call(this.files || []);
+					this.value = '';
+					for (let i = 0; i < files.length; i++) {
+						try { S.photos.push(await resizeImage(files[i], 1280, 650000)); }
+						catch (err) { setErr('เปิดรูปไม่ได้: ' + files[i].name); }
+					}
+					renderPhotoGrid();
 				});
+				renderPhotoGrid();
+			}
+			if ($('in-member')) bindEnter($('in-member'));
+		}
+
+		function billCols(e) { return e.useBillNo && e.useBillAmount ? 'c2' : 'c1'; }
+
+		// Enter → ช่องถัดไป (สมาชิก → บิลแรก → ยอด → บิลถัดไป ...) / ตรวจสอบ
+		function bindEnter(inp) {
+			inp.addEventListener('keydown', function (ev) {
+				if (ev.key !== 'Enter') return;
+				ev.preventDefault();
+				const all = Array.prototype.slice.call($('input-fields').querySelectorAll('#in-member, .bill-no, .bill-amt'));
+				const i = all.indexOf(inp);
+				if (i >= 0 && i < all.length - 1) all[i + 1].focus(); else check();
+			});
+		}
+
+		function addBillRow(focus) {
+			const e = S.event;
+			const row = document.createElement('div');
+			row.className = 'bill-row ' + billCols(e);
+			row.innerHTML = (e.useBillNo ? '<input class="bill-no sm-input" autocomplete="off" autocapitalize="characters" placeholder="เลขที่บิล">' : '') +
+				(e.useBillAmount ? '<input class="bill-amt sm-input" inputmode="decimal" autocomplete="off" placeholder="0.00">' : '') +
+				'<button type="button" class="bill-del" title="ลบแถว">✕</button>';
+			$('bill-rows').appendChild(row);
+			row.querySelectorAll('input').forEach(bindEnter);
+			const amt = row.querySelector('.bill-amt');
+			if (amt) amt.addEventListener('input', updateBillTotal);
+			row.querySelector('.bill-del').addEventListener('click', function () {
+				if ($('bill-rows').children.length <= 1) { row.querySelectorAll('input').forEach(function (i) { i.value = ''; }); }
+				else row.remove();
+				updateBillTotal();
+				syncBillDel();
+			});
+			syncBillDel();
+			if (focus) row.querySelector('input').focus();
+		}
+
+		function syncBillDel() {
+			const rows = $('bill-rows').children;
+			Array.prototype.forEach.call(rows, function (r) { r.querySelector('.bill-del').style.visibility = rows.length > 1 ? 'visible' : 'hidden'; });
+		}
+
+		function parseAmount(v) {
+			const t = String(v || '').replace(/[,\s]/g, '');
+			return /^\d+(\.\d{1,2})?$/.test(t) ? Number(t) : null;
+		}
+
+		function updateBillTotal() {
+			if (!$('bill-total')) return;
+			let total = 0;
+			$('bill-rows').querySelectorAll('.bill-amt').forEach(function (i) { total += parseAmount(i.value) || 0; });
+			$('bill-total').textContent = '฿' + money(total);
+			const min = S.event.minBillAmount;
+			if ($('bill-min')) $('bill-min').classList.toggle('ok-text', min != null && total >= min);
+		}
+
+		function renderPhotoGrid() {
+			$('photo-grid').innerHTML = S.photos.map(function (p, i) {
+				return '<div class="ph"><img src="' + p + '" alt=""><button type="button" data-i="' + i + '">✕</button></div>';
+			}).join('');
+			$('photo-grid').querySelectorAll('button').forEach(function (b) {
+				b.addEventListener('click', function () { S.photos.splice(Number(b.dataset.i), 1); renderPhotoGrid(); });
 			});
 		}
 
 		function readInput() {
+			const bills = [];
+			if ($('bill-rows')) {
+				$('bill-rows').querySelectorAll('.bill-row').forEach(function (r) {
+					const no = r.querySelector('.bill-no'), amt = r.querySelector('.bill-amt');
+					const b = { billNo: no ? no.value.trim() : null, amount: amt ? amt.value.trim() : null };
+					if ((b.billNo || '') !== '' || (b.amount || '') !== '') bills.push(b);
+				});
+			}
 			return {
 				member: $('in-member') ? $('in-member').value.trim() : null,
-				bill: $('in-bill') ? $('in-bill').value.trim() : null,
-				amount: $('in-amount') && $('in-amount').value.trim() !== '' ? Number($('in-amount').value.replace(/,/g, '')) : null
+				bills: bills,
+				note: $('in-note') ? $('in-note').value.trim() : null
 			};
 		}
 
@@ -479,7 +615,7 @@
 				const d = await rpc('event_dashboard', { p_event_id: S.event.id });
 				S.event = d.event;
 				renderStock($('stock'), d.gifts);
-				renderRecent($('recent'), d.recent, false);
+				renderRecent($('recent'), d.recent, false, S.event.id);
 			} catch (e) { handleError(e, $('err')); }
 		}
 
@@ -493,16 +629,23 @@
 			}).join('');
 		}
 
-		function renderRecent(el, rows, canVoid) {
+		function renderRecent(el, rows, canVoid, eventId) {
 			if (!rows.length) { el.innerHTML = '<div class="muted">ยังไม่มีรายการ</div>'; return; }
 			el.innerHTML = rows.map(function (x) {
 				const tag = x.status === 'REDEEMED' ? '<span class="tag r">รับ</span>'
 					: x.status === 'DUPLICATE_ATTEMPT' ? '<span class="tag d">ซ้ำ</span>'
 					: '<span class="tag v">ยกเลิก</span>';
+				const icons = (x.photoCount ? ' 📷' + x.photoCount : '') + (x.note ? ' 📝' : '');
 				const voidBtn = canVoid && x.status === 'REDEEMED' ? '<button class="btn-void" data-id="' + x.id + '">ยกเลิก</button>' : '';
-				return '<div class="row' + (x.status === 'VOID' ? ' voided' : '') + '"><span>' + tag + ' <span class="txt">' + describeInput(x) + ' → ' + esc(x.giftName) + '</span></span>' +
+				return '<div class="row clickable' + (x.status === 'VOID' ? ' voided' : '') + '" data-id="' + x.id + '"><span>' + tag + ' <span class="txt">' + describeInput(x) + ' → ' + esc(x.giftName) + '</span>' + icons + '</span>' +
 					'<span class="meta">' + esc(x.ts.slice(11, 16)) + voidBtn + '</span></div>';
 			}).join('');
+			el.querySelectorAll('.row').forEach(function (r) {
+				r.addEventListener('click', function (ev) {
+					if (ev.target.closest('.btn-void')) return;
+					openDetail(eventId, Number(r.dataset.id), canVoid);
+				});
+			});
 			if (canVoid) {
 				el.querySelectorAll('.btn-void').forEach(function (b) {
 					const row = rows.filter(function (r) { return r.id === Number(b.dataset.id); })[0];
@@ -511,16 +654,57 @@
 			}
 		}
 
+		/* ---------- รายละเอียด 1 รายการ (บิล / หมายเหตุ / รูป) ---------- */
+		async function openDetail(eventId, redemptionId, canVoid) {
+			const m = $('modal');
+			m.innerHTML = '<div class="modal detail"><p class="muted">กำลังโหลด...</p></div>';
+			m.classList.remove('hidden');
+			try {
+				const d = await rpc('redemption_detail', { p_event_id: eventId, p_redemption_id: redemptionId });
+				const r = d.redemption;
+				const statusTxt = r.status === 'REDEEMED' ? '<span class="tag r">รับ</span>'
+					: r.status === 'DUPLICATE_ATTEMPT' ? '<span class="tag d">พยายามแลกซ้ำ (' + (r.matchedBy === 'bill' ? 'บิล ' : 'สมาชิก ') + esc(r.matchedKey || '') + ')</span>'
+					: '<span class="tag v">ยกเลิกแล้ว</span>';
+				const showAmt = r.bills.some(function (b) { return b.amount != null; });
+				m.innerHTML = '<div class="modal detail"><div class="row-between"><b>รายละเอียด</b><button class="chip g" id="m-close">ปิด</button></div>' +
+					'<div style="margin:8px 0 4px">' + statusTxt + '</div>' +
+					(r.memberId ? '<div class="kv"><span>รหัสสมาชิก</span><b>' + esc(r.memberId) + '</b></div>' : '') +
+					'<div class="kv"><span>ของรางวัล</span><b>' + esc(r.giftName || '-') + '</b></div>' +
+					'<div class="kv"><span>เวลา</span><span>' + esc(r.ts) + '</span></div>' +
+					(r.staff ? '<div class="kv"><span>พนักงาน</span><span>' + esc(r.staff) + '</span></div>' : '') +
+					(r.status === 'VOID' ? '<div class="kv"><span>ยกเลิกโดย</span><span>' + esc(r.voidedBy) + ' · ' + esc(r.voidedAt) + '</span></div>' : '') +
+					billsTable(r.bills, showAmt, false) +
+					(r.note ? '<div class="note-box">📝 ' + esc(r.note) + '</div>' : '') +
+					(d.photos.length ? '<div class="lbl" style="margin-top:10px">รูปถ่าย ' + d.photos.length + ' รูป (แตะเพื่อขยาย)</div><div class="detail-photos">' +
+						d.photos.map(function (p) { return '<img src="' + p.image + '" alt="">'; }).join('') + '</div>' : '') +
+					(canVoid && r.status === 'REDEEMED' ? '<button class="btn btn-danger" id="m-void">ยกเลิกรายการนี้</button>' : '') +
+					'</div>';
+				$('m-close').onclick = closeModal;
+				m.querySelectorAll('.detail-photos img').forEach(function (img) {
+					img.addEventListener('click', function () { showPhoto(img.src); });
+				});
+				if ($('m-void')) $('m-void').onclick = function () { confirmVoid(r); };
+			} catch (e) { closeModal(); handleError(e); }
+		}
+
+		function showPhoto(src) {
+			const v = document.createElement('div');
+			v.className = 'photo-view';
+			v.innerHTML = '<img src="' + src + '" alt="">';
+			v.addEventListener('click', function () { v.remove(); });
+			document.body.appendChild(v);
+		}
+
 		async function check() {
 			const inp = readInput();
 			setErr('');
 			const btn = $('btn-check');
 			btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...';
 			try {
-				const res = await rpc('staff_check', { p_event_id: S.event.id, p_member_id: inp.member, p_bill_no: inp.bill, p_bill_amount: inp.amount, p_staff: staffName() });
+				const res = await rpc('staff_check', { p_event_id: S.event.id, p_member_id: inp.member, p_bills: inp.bills, p_staff: staffName() });
 				if (!res.ok) setErr(res.message);
-				else if (res.duplicate) showDuplicate(res.prev, res.matchedBy, res.attempts);
-				else { S.input = res.input; showChoices(res.gifts); }
+				else if (res.duplicate) showDuplicate(res.prev, res.matchedBy, res.attempts, res.matchedKey);
+				else { S.input = res.input; S.note = inp.note; showChoices(res.gifts); }
 				loadStaffDashboard();
 			} catch (e) { handleError(e, $('err')); }
 			btn.disabled = false; btn.textContent = 'ตรวจสอบ';
@@ -532,8 +716,8 @@
 			$('step-result').classList.remove('hidden');
 		}
 
-		function showDuplicate(prev, matchedBy, attempts) {
-			const what = matchedBy === 'bill' ? 'บิลนี้ใช้แลกไปแล้ว' : 'สมาชิกนี้รับไปแล้ว';
+		function showDuplicate(prev, matchedBy, attempts, matchedKey) {
+			const what = matchedBy === 'bill' ? 'บิล ' + esc(matchedKey || '') + ' ใช้แลกไปแล้ว' : 'สมาชิกนี้รับไปแล้ว';
 			showResult(
 				'<div class="result dup"><h2>❌ ' + what + '</h2>' +
 				'<p>' + describeInput(prev) + '</p>' + giftImg(prev.giftId) +
@@ -563,8 +747,10 @@
 
 		function confirmGift(g) {
 			const m = $('modal');
+			const extra = (S.note ? '<br><span class="muted">📝 ' + esc(S.note) + '</span>' : '') +
+				(S.photos && S.photos.length ? '<br><span class="muted">📷 ' + S.photos.length + ' รูป</span>' : '');
 			m.innerHTML = '<div class="modal"><h3 style="margin-top:0">ยืนยันการแลก</h3>' +
-				'<p>' + describeInput(S.input) + '<br>รับ <b>' + esc(g.name) + '</b></p>' +
+				'<p>' + describeInput(S.input) + '<br>รับ <b>' + esc(g.name) + '</b>' + extra + '</p>' +
 				'<div class="btns"><button class="btn btn-ghost" id="m-cancel">ยกเลิก</button>' +
 				'<button class="btn btn-primary" id="m-ok">ยืนยัน</button></div></div>';
 			m.classList.remove('hidden');
@@ -578,18 +764,25 @@
 			try {
 				const res = await rpc('staff_redeem', {
 					p_event_id: S.event.id,
-					p_member_id: S.input.memberId, p_bill_no: S.input.billNo, p_bill_amount: S.input.billAmount,
-					p_gift_id: g.id, p_staff: staffName()
+					p_member_id: S.input.memberId,
+					p_bills: S.input.bills,
+					p_gift_id: g.id, p_staff: staffName(),
+					p_note: S.note || null
 				});
 				closeModal();
 				if (res.ok) {
 					const r = res.redemption;
-					showResult('<div class="result ok"><h2>✅ แลกสำเร็จ</h2><p>' + describeInput(r) + '</p>' + giftImg(r.giftId) +
+					showResult('<div class="result ok"><h2>✅ แลกสำเร็จ</h2>' +
+						(r.memberId ? '<p>สมาชิก ' + esc(r.memberId) + '</p>' : '') + giftImg(r.giftId) +
 						'<p>รับ <b>' + esc(r.giftName) + '</b></p><p>' + esc(r.ts) + '</p>' +
+						billsTable(r.bills, S.event.useBillAmount, true) +
+						(r.note ? '<p style="font-size:14px">📝 ' + esc(r.note) + '</p>' : '') +
+						'<div id="photo-status"></div>' +
 						'<p style="font-size:13px">เหลือ ' + res.remaining + ' ชิ้น</p>' +
 						'<p class="note">' + (role === 'admin' ? 'กดผิด? ยกเลิกได้ที่ ← Admin › รายการ' : 'กดผิด? แจ้ง Admin ให้ยกเลิกรายการ') + '</p></div>');
+					if (S.photos && S.photos.length) uploadPhotos(r.id, S.photos.slice());
 				} else if (res.reason === 'DUPLICATE') {
-					showDuplicate(res.prev, res.matchedBy, 0);
+					showDuplicate(res.prev, res.matchedBy, 0, res.matchedKey);
 				} else if (res.reason === 'OUT_OF_STOCK') {
 					showResult('<div class="result warn"><h2>⚠️ ' + esc(res.gift.name) + ' หมดแล้ว</h2><p>ให้ลูกค้าเลือกอย่างอื่น</p></div>');
 				} else {
@@ -599,11 +792,39 @@
 			} catch (e) { closeModal(); handleError(e, $('err')); }
 		}
 
+		// อัปโหลดรูปทีละรูปหลังแลกสำเร็จ (ไม่สำเร็จ → กดลองใหม่ได้)
+		async function uploadPhotos(redemptionId, photos) {
+			const box = $('photo-status');
+			const failed = [];
+			for (let i = 0; i < photos.length; i++) {
+				if (box) box.innerHTML = '<p style="font-size:14px">📷 กำลังอัปโหลดรูป ' + (i + 1) + '/' + photos.length + '...</p>';
+				try { await rpc('staff_add_photo', { p_event_id: S.event.id, p_redemption_id: redemptionId, p_image: photos[i] }); }
+				catch (e) { failed.push(photos[i]); }
+			}
+			if (!box) return;
+			if (!failed.length) { box.innerHTML = '<p style="font-size:14px">📷 แนบรูปแล้ว ' + photos.length + ' รูป</p>'; return; }
+			box.innerHTML = '<p style="font-size:14px">⚠️ อัปโหลดไม่สำเร็จ ' + failed.length + ' รูป</p>' +
+				'<button class="btn btn-void-lg" id="btn-retry-photo">ลองอัปโหลดอีกครั้ง</button>';
+			$('btn-retry-photo').onclick = function () { uploadPhotos(redemptionId, failed); };
+		}
+
+		// ตารางบิล: ซ้ายเลขที่บิล ขวายอด + Total
+		function billsTable(bills, showAmount, onDark) {
+			if (!bills || !bills.length) return '';
+			let total = 0;
+			const rows = bills.map(function (b) {
+				total += Number(b.amount || 0);
+				return '<tr><td>' + esc(b.billNo || '-') + '</td>' + (showAmount ? '<td class="num">฿' + money(b.amount) + '</td>' : '') + '</tr>';
+			}).join('');
+			return '<table class="bills-tbl' + (onDark ? ' on-dark' : '') + '">' + rows +
+				(showAmount ? '<tr class="tot"><td>Total</td><td class="num">฿' + money(total) + '</td></tr>' : '') + '</table>';
+		}
+
 		function resetStaff() {
-			S.input = null;
+			S.input = null; S.note = null;
 			$('step-result').classList.add('hidden');
 			$('step-input').classList.remove('hidden');
-			$('input-fields').querySelectorAll('input').forEach(function (i) { i.value = ''; });
+			buildInputFields();
 			const first = $('input-fields').querySelector('input');
 			if (first) first.focus();
 			setErr('');
@@ -633,7 +854,7 @@
 				'<div class="red"><b>' + t.duplicateAttempts + '</b><small>พยายามแลกซ้ำ</small></div>' +
 				'<div><b>' + t.voided + '</b><small>ยกเลิกรายการ</small></div>' +
 				'<div><b>' + remainingTotal + '</b><small>ของคงเหลือรวม</small></div>' +
-				(ev.useBillAmount ? '<div style="grid-column:1/-1"><b>฿' + money(t.billTotal) + '</b><small>ยอดบิลรวม (เฉพาะที่แจกจริง)</small></div>' : '') +
+				(ev.useBillAmount ? '<div style="grid-column:1/-1"><b>฿' + money(t.billTotal) + '</b><small>ยอดบิลรวม (เฉพาะที่แจกจริง' + (t.billCount ? ' · ' + t.billCount + ' บิล' : '') + ')</small></div>' : '') +
 				'</div></div>';
 
 			html += '<div class="card"><label>ของรางวัล</label>' + (s.gifts.length ? '<table class="sum">' + s.gifts.map(function (g) {
@@ -676,11 +897,13 @@
 		async function exportCsv(eventId) {
 			try {
 				const d = await rpc('event_export', { p_event_id: eventId });
-				const head = ['timestamp', 'member_id', 'bill_no', 'bill_amount', 'gift', 'staff', 'status', 'matched_by', 'voided_at', 'voided_by'];
+				const head = ['timestamp', 'member_id', 'bill_no', 'bill_total', 'bill_count', 'bills_detail', 'gift', 'staff', 'status', 'matched_by', 'matched_key', 'note', 'photo_count', 'voided_at', 'voided_by'];
 				const q = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
 				const t = function (v) { return v ? '="' + String(v).replace(/"/g, '') + '"' : ''; }; // กัน Excel ตัด 0 นำหน้า
 				const lines = d.rows.map(function (r) {
-					return [q(r.ts), t(r.memberId), t(r.billNo), r.billAmount == null ? '' : r.billAmount, q(r.giftName), q(r.staff), q(r.status), q(r.matchedBy), q(r.voidedAt), q(r.voidedBy)].join(',');
+					// bills_detail = เลขบิล:ยอด | เลขบิล:ยอด
+					const detail = (r.bills || []).map(function (b) { return (b.billNo || '-') + (b.amount != null ? ':' + b.amount : ''); }).join(' | ');
+					return [q(r.ts), t(r.memberId), t(r.billNo), r.billAmount == null ? '' : r.billAmount, (r.bills || []).length || '', q(detail), q(r.giftName), q(r.staff), q(r.status), q(r.matchedBy), q(r.matchedKey), q(r.note), r.photoCount || '', q(r.voidedAt), q(r.voidedBy)].join(',');
 				});
 				const csv = '﻿' + head.join(',') + '\n' + lines.join('\n');
 				const a = document.createElement('a');
@@ -730,7 +953,7 @@
 		function renderAdminHeader(ev) {
 			A.event = ev;
 			$('ae-name').textContent = ev.name;
-			const fields = [ev.useMember ? 'รหัสสมาชิก' : null, ev.useBillNo ? 'เลขที่บิล' : null, ev.useBillAmount ? 'ยอดบิล' : null].filter(Boolean).join(', ');
+			const fields = [ev.useMember ? 'รหัสสมาชิก' : null, ev.useBillNo ? 'เลขที่บิล' : null, ev.useBillAmount ? 'ยอดบิล' : null, ev.useNote ? 'หมายเหตุ' : null, ev.usePhotos ? 'รูป' : null].filter(Boolean).join(', ');
 			const dedup = [ev.dedupMember ? 'สมาชิก' : null, ev.dedupBill ? 'บิล' : null].filter(Boolean).join(' + ');
 			$('ae-sub').innerHTML = 'สาขา ' + esc(ev.branchCode) + ' · กรอก: ' + esc(fields) + '<br>กันซ้ำด้วย: ' + esc(dedup) +
 				(ev.minBillAmount != null ? ' · ขั้นต่ำ ฿' + money(ev.minBillAmount) : '');
@@ -753,7 +976,7 @@
 					$('ae-body').innerHTML = '<div class="card"><label>คงเหลือ</label><div class="stock" id="ae-stock"></div></div>' +
 						'<div class="card"><label>20 รายการล่าสุด (ดูทั้งหมดใน CSV)</label><div class="recent" id="ae-recent"></div></div>';
 					renderStock($('ae-stock'), d.gifts);
-					renderRecent($('ae-recent'), d.recent, true);
+					renderRecent($('ae-recent'), d.recent, true, A.eventId);
 				}
 			} catch (e) { handleError(e); }
 		}
@@ -792,6 +1015,8 @@
 				$('ed-use-member').checked = true;
 				$('ed-use-bill').checked = false;
 				$('ed-use-amount').checked = false;
+				$('ed-use-note').checked = false;
+				$('ed-use-photos').checked = false;
 				$('ed-dedup-member').checked = true;
 				$('ed-dedup-bill').checked = false;
 				$('ed-min').value = '';
@@ -809,6 +1034,8 @@
 					$('ed-use-member').checked = e.useMember;
 					$('ed-use-bill').checked = e.useBillNo;
 					$('ed-use-amount').checked = e.useBillAmount;
+					$('ed-use-note').checked = !!e.useNote;
+					$('ed-use-photos').checked = !!e.usePhotos;
 					$('ed-dedup-member').checked = e.dedupMember;
 					$('ed-dedup-bill').checked = e.dedupBill;
 					$('ed-min').value = e.minBillAmount == null ? '' : e.minBillAmount;
@@ -837,7 +1064,7 @@
 			$('ed-dedup-member-row').classList.toggle('disabled', locked || !useM);
 			$('ed-dedup-bill-row').classList.toggle('disabled', locked || !useB);
 			$('ed-min-wrap').classList.toggle('hidden', !useA);
-			$('ed-lock-hint').textContent = locked ? '🔒 Event นี้มีการแลกแล้ว เปลี่ยนช่องข้อมูล/วิธีกันซ้ำไม่ได้ (แก้ชื่อ สาขา ยอดขั้นต่ำ และของรางวัลได้)' : '';
+			$('ed-lock-hint').textContent = locked ? '🔒 Event นี้มีการแลกแล้ว เปลี่ยนรหัสสมาชิก/เลขที่บิล/ยอดบิล/วิธีกันซ้ำไม่ได้ (หมายเหตุ รูป ชื่อ สาขา ยอดขั้นต่ำ และของรางวัลแก้ได้)' : '';
 		}
 
 		function giftRowImg(g) {
@@ -889,7 +1116,9 @@
 		}
 
 		// ย่อรูปให้ด้านยาวสุด 480px เป็น JPEG ก่อนส่ง
-		function resizeImage(file) {
+		// ย่อรูป: ด้านยาวสุด max px เป็น JPEG ไม่เกิน limit ตัวอักษร (ของรางวัล 480 / รูปถ่ายบิล 1280)
+		function resizeImage(file, max, limit) {
+			max = max || 480; limit = limit || 550000;
 			return new Promise(function (resolve, reject) {
 				const reader = new FileReader();
 				reader.onerror = reject;
@@ -897,14 +1126,14 @@
 					const img = new Image();
 					img.onerror = function () { reject(new Error('เปิดไฟล์รูปไม่ได้')); };
 					img.onload = function () {
-						const max = 480, scale = Math.min(1, max / Math.max(img.width, img.height));
+						const scale = Math.min(1, max / Math.max(img.width, img.height));
 						const c = document.createElement('canvas');
 						c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
 						const ctx = c.getContext('2d');
 						ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
 						ctx.drawImage(img, 0, 0, c.width, c.height);
 						let q = 0.82, out = c.toDataURL('image/jpeg', q);
-						while (out.length > 550000 && q > 0.4) { q -= 0.1; out = c.toDataURL('image/jpeg', q); }
+						while (out.length > limit && q > 0.3) { q -= 0.1; out = c.toDataURL('image/jpeg', q); }
 						resolve(out);
 					};
 					img.src = reader.result;
@@ -945,6 +1174,8 @@
 					useMember: $('ed-use-member').checked,
 					useBillNo: $('ed-use-bill').checked,
 					useBillAmount: $('ed-use-amount').checked,
+					useNote: $('ed-use-note').checked,
+					usePhotos: $('ed-use-photos').checked,
 					dedupMember: $('ed-dedup-member').checked,
 					dedupBill: $('ed-dedup-bill').checked,
 					minBillAmount: $('ed-min').value.trim() === '' ? null : Number($('ed-min').value.replace(/,/g, ''))
