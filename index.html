@@ -484,19 +484,31 @@
 		// sidebar รายการ Event ของสาขา (พนักงาน · จอกว้าง) — กดสลับ Event ได้ทันที
 		function renderSide() {
 			const side = $('ev-side');
-			if (role === 'admin' || !S.events || !S.events.length) { document.body.classList.remove('has-side'); return; }
+			const isAdmin = role === 'admin';
+			const list = isAdmin ? (S.sideList || []) : (S.events || []);
+			if (!list.length) { document.body.classList.remove('has-side'); return; }
 			side.style.top = document.querySelector('header').offsetHeight + 'px';
-			side.innerHTML = '<div class="side-title">สาขา ' + esc(S.branch || S.event.branchCode) + ' · ' + S.events.length + ' Event</div>' +
-				S.events.map(function (e) {
+			side.innerHTML = '<div class="side-title">สาขา ' + esc(isAdmin ? S.event.branchCode : (S.branch || S.event.branchCode)) + ' · ' + list.length + ' Event ที่เปิดอยู่</div>' +
+				list.map(function (e) {
 					const sub = [e.tiers && e.tiers.length ? 'Tier' : null, e.bonusRule ? '⭐ โบนัส' : null].filter(Boolean).join(' · ');
 					return '<button class="side-item' + (S.event && e.id === S.event.id ? ' on' : '') + '" data-id="' + e.id + '">' + thumbHtml(e.id) +
 						'<div><div class="n">' + esc(e.name) + '</div>' + (sub ? '<div class="s">' + sub + '</div>' : '') + '</div></button>';
 				}).join('') +
-				'<div class="side-foot"><button class="btn btn-ghost btn-sm" onclick="showBranchView()">⇄ เปลี่ยนสาขา</button></div>';
+				'<div class="side-foot">' + (isAdmin
+					? '<button class="btn btn-ghost btn-sm" onclick="backToAdmin()">← กลับหน้า Admin</button>'
+					: '<button class="btn btn-ghost btn-sm" onclick="showBranchView()">⇄ เปลี่ยนสาขา</button>') + '</div>';
 			side.querySelectorAll('.side-item').forEach(function (b) {
-				b.addEventListener('click', function () {
-					const ev = S.events.filter(function (x) { return x.id === Number(b.dataset.id); })[0];
-					if (ev && (!S.event || ev.id !== S.event.id || !$('view-staff-summary').classList.contains('hidden'))) startStaff(ev);
+				b.addEventListener('click', async function () {
+					const id = Number(b.dataset.id);
+					if (S.event && id === S.event.id && $('view-staff-summary').classList.contains('hidden')) return;
+					if (isAdmin) {
+						// Admin: โหลดข้อมูล Event เต็มก่อนเข้าแลก
+						try { const d = await rpc('admin_get_event', { p_event_id: id }); A.event = d.event; startStaff(d.event); }
+						catch (e) { handleError(e); }
+					} else {
+						const ev = S.events.filter(function (x) { return x.id === id; })[0];
+						if (ev) startStaff(ev);
+					}
 				});
 			});
 			document.body.classList.add('has-side');
@@ -745,6 +757,11 @@
 		/* ---------- admin: เข้าหน้าแลกของ Event ที่เลือก ---------- */
 		async function adminRedeem() {
 			$('hdr-admin').classList.add('hidden');
+			// sidebar ของ Admin: Event ที่เปิดอยู่ในสาขาเดียวกัน
+			try {
+				const list = await rpc('admin_list_events');
+				S.sideList = list.filter(function (e) { return e.isActive && e.branchCode === A.event.branchCode; });
+			} catch (e) { S.sideList = []; }
 			await startStaff(A.event);
 		}
 
