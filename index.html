@@ -156,6 +156,9 @@
 		.bill-head .num { text-align:right; }
 		.bill-row + .bill-row { margin-top:6px; }
 		.tier-row { display:grid; grid-template-columns:1fr auto 70px auto auto; gap:6px; align-items:center; margin-top:6px; }
+		.bonus-badge { display:inline-block; background:#E82128; color:#fff; border-radius:999px; padding:2px 10px; font-weight:700; }
+		.bonus-box { border:2px dashed #E82128; border-radius:12px; padding:10px; margin-top:10px; background:#fff6f6; }
+		.chip.bonus-on { background:#E82128; color:#fff; border-color:#E82128; }
 		.qty-badge { display:inline-block; background:#FCDC0F; color:#000; border-radius:999px; padding:2px 10px; font-weight:700; }
 		.bill-row .bill-amt { text-align:right; }
 		.bill-del { border:0; background:#f1f3f2; color:#999; border-radius:8px; height:36px; font-size:13px; }
@@ -381,6 +384,14 @@
 					<div id="ed-tiers"></div>
 					<button type="button" class="btn btn-outline btn-sm" onclick="addTier()">+ เพิ่ม Tier</button>
 					<div class="hint">เช่น 500 → 1 · 800 → 2 · 1000 → 3 · ยอดไม่ถึง Tier ต่ำสุดจะแลกไม่ได้</div>
+					<label class="check" style="margin-top:12px"><input type="checkbox" id="ed-bonus-on" onchange="syncBonus()"> ⭐ มีของโบนัส (ซื้อสินค้ากลุ่มที่กำหนดครบ → ได้โบนัสเพิ่ม)</label>
+					<div class="bonus-box hidden" id="ed-bonus-box">
+						<label>ชื่อยอดที่พนักงานต้องกรอก</label>
+						<input id="ed-bonus-label" class="sm-input" placeholder="เช่น ยอดสินค้าแม่และเด็ก">
+						<label style="margin-top:8px">ยอดขั้นต่ำของกลุ่มนี้ (บาท)</label>
+						<input id="ed-bonus-min" class="sm-input" inputmode="decimal" placeholder="เช่น 200">
+						<div class="hint">ได้โบนัสเท่ากับจำนวนตาม Tier เช่น Tier ได้ 2 ใบ + ยอดกลุ่มครบ → โบนัส 2 ใบ · เลือกว่าของรางวัลไหนเป็นโบนัสด้วยปุ่ม ⭐ ในรายการของรางวัลด้านล่าง</div>
+					</div>
 				</div>
 
 				<div class="lbl" style="margin-top:12px">กันแลกซ้ำด้วย</div>
@@ -488,6 +499,12 @@
 				const t = THUMBS[d.dataset.thumb];
 				d.innerHTML = t && t.image ? '<img src="' + t.image + '" alt="">' : '🎁';
 			});
+		}
+
+		// ข้อความของที่ได้ในรายการ: ของหลัก × N + โบนัส × N
+		function giftLine(r) {
+			return esc(r.giftName || '-') + qtyTxt(r.qty) +
+				(r.bonusQty > 0 ? ' + <span class="bonus-badge">⭐ ' + esc(r.bonusGiftName || 'โบนัส') + ' × ' + r.bonusQty + '</span>' : '');
 		}
 
 		// "× 3" เมื่อแจกมากกว่า 1 ชิ้น
@@ -705,6 +722,9 @@
 						(e.tiers && e.tiers.length ? '<div class="hint">Tier: ' + tierText(e.tiers) + ' ชิ้น</div><div class="hint" id="bill-tier"></div>' : '') : '') +
 					'</div>');
 			}
+			if (e.bonusRule) f.push('<div class="field bonus-box"><label>⭐ ' + esc(e.bonusRule.label) + ' (บาท)</label>' +
+				'<input id="in-cat" inputmode="decimal" autocomplete="off" placeholder="ดูจากใบเสร็จ · ไม่มีใส่ 0 หรือเว้นว่าง">' +
+				'<div class="hint" id="cat-hint">ครบ ฿' + money(e.bonusRule.min) + ' ได้โบนัสเพิ่มเท่าจำนวนตาม Tier</div></div>');
 			if (e.useNote) f.push('<div class="field"><label>หมายเหตุ</label><textarea id="in-note" rows="2" placeholder="ไม่บังคับ"></textarea></div>');
 			if (e.usePhotos) f.push('<div class="field"><label>รูปถ่าย (แนบได้หลายรูป)</label>' +
 				'<div class="photo-grid" id="photo-grid"></div>' +
@@ -727,6 +747,7 @@
 				renderPhotoGrid();
 			}
 			if ($('in-member')) bindEnter($('in-member'));
+			if ($('in-cat')) $('in-cat').addEventListener('input', updateBillTotal);
 		}
 
 		function billCols(e) { return e.useBillNo && e.useBillAmount ? 'c2' : 'c1'; }
@@ -784,6 +805,12 @@
 				const q = tierQty(S.event.tiers, total);
 				$('bill-tier').innerHTML = q ? '<span class="qty-badge">ได้ ' + q + ' ชิ้น</span>' : 'ยังไม่ถึง Tier ต่ำสุด';
 			}
+			if ($('cat-hint') && S.event.bonusRule) {
+				const cat = parseAmount($('in-cat').value) || 0, bq = tierQty(S.event.tiers, total);
+				$('cat-hint').innerHTML = cat >= Number(S.event.bonusRule.min) && bq
+					? '<span class="bonus-badge">⭐ ได้โบนัส ' + bq + ' ชิ้น</span>'
+					: 'ครบ ฿' + money(S.event.bonusRule.min) + ' ได้โบนัสเพิ่มเท่าจำนวนตาม Tier';
+			}
 		}
 
 		function renderPhotoGrid() {
@@ -807,7 +834,8 @@
 			return {
 				member: $('in-member') ? $('in-member').value.trim() : null,
 				bills: bills,
-				note: $('in-note') ? $('in-note').value.trim() : null
+				note: $('in-note') ? $('in-note').value.trim() : null,
+				cat: $('in-cat') && $('in-cat').value.trim() !== '' ? parseAmount($('in-cat').value) : null
 			};
 		}
 
@@ -844,7 +872,7 @@
 					: '<span class="tag v">ยกเลิก</span>';
 				const icons = (x.photoCount ? ' 📷' + x.photoCount : '') + (x.note ? ' 📝' : '');
 				const voidBtn = canVoid && x.status === 'REDEEMED' ? '<button class="btn-void" data-id="' + x.id + '">ยกเลิก</button>' : '';
-				return '<div class="row clickable' + (x.status === 'VOID' ? ' voided' : '') + '" data-id="' + x.id + '"><span>' + tag + ' <span class="txt">' + describeInput(x) + ' → ' + esc(x.giftName) + qtyTxt(x.qty) + '</span>' + icons + '</span>' +
+				return '<div class="row clickable' + (x.status === 'VOID' ? ' voided' : '') + '" data-id="' + x.id + '"><span>' + tag + ' <span class="txt">' + describeInput(x) + ' → ' + giftLine(x) + '</span>' + icons + '</span>' +
 					'<span class="meta">' + esc(x.ts.slice(11, 16)) + voidBtn + '</span></div>';
 			}).join('');
 			el.querySelectorAll('.row').forEach(function (r) {
@@ -876,7 +904,8 @@
 				m.innerHTML = '<div class="modal detail"><div class="row-between"><b>รายละเอียด</b><button class="chip g" id="m-close">ปิด</button></div>' +
 					'<div style="margin:8px 0 4px">' + statusTxt + '</div>' +
 					(r.memberId ? '<div class="kv"><span>รหัสสมาชิก</span><b>' + esc(r.memberId) + '</b></div>' : '') +
-					'<div class="kv"><span>ของรางวัล</span><b>' + esc(r.giftName || '-') + qtyTxt(r.qty) + '</b></div>' +
+					'<div class="kv"><span>ของรางวัล</span><b>' + giftLine(r) + '</b></div>' +
+					(r.catAmount != null ? '<div class="kv"><span>ยอดกลุ่มโบนัส</span><span>฿' + money(r.catAmount) + '</span></div>' : '') +
 					'<div class="kv"><span>เวลา</span><span>' + esc(r.ts) + '</span></div>' +
 					(r.staff ? '<div class="kv"><span>พนักงาน</span><span>' + esc(r.staff) + '</span></div>' : '') +
 					(r.status === 'VOID' ? '<div class="kv"><span>ยกเลิกโดย</span><span>' + esc(r.voidedBy) + ' · ' + esc(r.voidedAt) + '</span></div>' : '') +
@@ -908,7 +937,8 @@
 			const btn = $('btn-check');
 			btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...';
 			try {
-				const res = await rpc('staff_check', { p_event_id: S.event.id, p_member_id: inp.member, p_bills: inp.bills, p_staff: staffName() });
+				if (inp.cat !== null && isNaN(inp.cat)) { setErr('ยอด' + (S.event.bonusRule ? S.event.bonusRule.label : '') + ' ไม่ถูกต้อง'); btn.disabled = false; btn.textContent = 'ตรวจสอบ'; return; }
+				const res = await rpc('staff_check', { p_event_id: S.event.id, p_member_id: inp.member, p_bills: inp.bills, p_staff: staffName(), p_cat_amount: inp.cat });
 				if (!res.ok) setErr(res.message);
 				else if (res.duplicate) showDuplicate(res.prev, res.matchedBy, res.attempts, res.matchedKey);
 				else { S.input = res.input; S.note = inp.note; showChoices(res.gifts); }
@@ -928,7 +958,7 @@
 			showResult(
 				'<div class="result dup"><h2>❌ ' + what + '</h2>' +
 				'<p>' + describeInput(prev) + '</p>' + giftImg(prev.giftId) +
-				'<p>รับ <b>' + esc(prev.giftName) + qtyTxt(prev.qty) + '</b></p>' +
+				'<p>รับ <b>' + giftLine(prev) + '</b></p>' +
 				'<p>เมื่อ ' + esc(prev.ts) + '</p>' +
 				(prev.staff ? '<p>โดย ' + esc(prev.staff) + '</p>' : '') +
 				(attempts ? '<p class="note">พยายามแลกซ้ำครั้งที่ ' + attempts + '</p>' : '') + '</div>'
@@ -937,6 +967,10 @@
 
 		function showChoices(gifts) {
 			const q = S.input.qty || 1;
+			gifts = gifts.filter(function (g) { return !g.isBonus; });
+			// ของหลักมีอย่างเดียว → ระบบเลือกให้ ไปหน้ายืนยันเลย
+			if (gifts.length === 1 && gifts[0].remaining >= q) { S.autoGift = true; confirmGift(gifts[0]); return; }
+			S.autoGift = false;
 			const btns = gifts.map(function (g) {
 				const short = g.remaining < q;
 				return '<button class="gift-btn" data-id="' + g.id + '"' + (short ? ' disabled' : '') + '>' + giftImg(g.id) +
@@ -945,7 +979,8 @@
 			}).join('');
 			$('step-input').classList.add('hidden');
 			$('step-result').innerHTML = '<div class="card"><label>✅ ' + describeInput(S.input) + ' — เลือกของรางวัล</label>' +
-				(q > 1 ? '<div style="margin:4px 0 8px"><span class="qty-badge">ได้ ' + q + ' ชิ้น</span></div>' : '') +
+				(q > 1 || S.input.bonusQty ? '<div style="margin:4px 0 8px">' + (q > 1 ? '<span class="qty-badge">ได้ ' + q + ' ชิ้น</span> ' : '') +
+					(S.input.bonusQty ? '<span class="bonus-badge">⭐ + ' + esc(S.input.bonusGift.name) + ' × ' + S.input.bonusQty + '</span>' : '') + '</div>' : '') +
 				(gifts.length ? '<div class="gift-grid">' + btns + '</div>' : '<div class="muted">Event นี้ยังไม่มีของรางวัล</div>') +
 				'<button class="btn btn-ghost" onclick="resetStaff()">ยกเลิก</button></div>';
 			$('step-result').classList.remove('hidden');
@@ -960,7 +995,9 @@
 			const extra = (S.note ? '<br><span class="muted">📝 ' + esc(S.note) + '</span>' : '') +
 				(S.photos && S.photos.length ? '<br><span class="muted">📷 ' + S.photos.length + ' รูป</span>' : '');
 			m.innerHTML = '<div class="modal"><h3 style="margin-top:0">ยืนยันการแลก</h3>' +
-				'<p>' + describeInput(S.input) + '<br>รับ <b>' + esc(g.name) + qtyTxt(S.input.qty) + '</b>' + extra + '</p>' +
+				'<p>' + describeInput(S.input) + '<br>รับ <b>' + giftLine({ giftName: g.name, qty: S.input.qty, bonusQty: S.input.bonusQty, bonusGiftName: S.input.bonusGift && S.input.bonusGift.name }) + '</b>' +
+				(S.input.bonusGift && S.input.bonusGift.remaining < S.input.bonusQty ? '<br><span style="color:var(--red)">⚠️ ' + esc(S.input.bonusGift.name) + ' เหลือ ' + S.input.bonusGift.remaining + ' ชิ้น ไม่พอ</span>' : '') +
+				extra + '</p>' +
 				'<div class="btns"><button class="btn btn-ghost" id="m-cancel">ยกเลิก</button>' +
 				'<button class="btn btn-primary" id="m-ok">ยืนยัน</button></div></div>';
 			m.classList.remove('hidden');
@@ -977,24 +1014,26 @@
 					p_member_id: S.input.memberId,
 					p_bills: S.input.bills,
 					p_gift_id: g.id, p_staff: staffName(),
-					p_note: S.note || null
+					p_note: S.note || null,
+					p_cat_amount: S.input.catAmount == null ? null : S.input.catAmount
 				});
 				closeModal();
 				if (res.ok) {
 					const r = res.redemption;
 					showResult('<div class="result ok"><h2>✅ แลกสำเร็จ</h2>' +
 						(r.memberId ? '<p>สมาชิก ' + esc(r.memberId) + '</p>' : '') + giftImg(r.giftId) +
-						'<p>รับ <b>' + esc(r.giftName) + qtyTxt(r.qty) + '</b></p><p>' + esc(r.ts) + '</p>' +
+						'<p>รับ <b>' + giftLine(r) + '</b></p><p>' + esc(r.ts) + '</p>' +
 						billsTable(r.bills, S.event.useBillAmount, true) +
 						(r.note ? '<p style="font-size:14px">📝 ' + esc(r.note) + '</p>' : '') +
 						'<div id="photo-status"></div>' +
-						'<p style="font-size:13px">เหลือ ' + res.remaining + ' ชิ้น</p>' +
+						'<p style="font-size:13px">เหลือ ' + res.remaining + ' ชิ้น' + (res.bonusRemaining != null ? ' · ' + esc(r.bonusGiftName) + ' เหลือ ' + res.bonusRemaining : '') + '</p>' +
 						'<p class="note">' + (role === 'admin' ? 'กดผิด? ยกเลิกได้ที่ ← Admin › รายการ' : 'กดผิด? แจ้ง Admin ให้ยกเลิกรายการ') + '</p></div>');
 					if (S.photos && S.photos.length) uploadPhotos(r.id, S.photos.slice());
 				} else if (res.reason === 'DUPLICATE') {
 					showDuplicate(res.prev, res.matchedBy, 0, res.matchedKey);
 				} else if (res.reason === 'OUT_OF_STOCK') {
-					showResult('<div class="result warn"><h2>⚠️ ' + esc(res.gift.name) + (res.remaining > 0 ? ' เหลือ ' + res.remaining + ' ชิ้น ไม่พอ ' + res.qty + ' ชิ้น' : ' หมดแล้ว') + '</h2><p>ให้ลูกค้าเลือกอย่างอื่น</p></div>');
+					showResult('<div class="result warn"><h2>⚠️ ' + (res.bonus ? 'โบนัส ' : '') + esc(res.gift.name) + (res.remaining > 0 ? ' เหลือ ' + res.remaining + ' ชิ้น ไม่พอ ' + res.qty + ' ชิ้น' : ' หมดแล้ว') + '</h2><p>' +
+						(res.bonus ? 'แจ้ง Admin เพิ่มจำนวนโบนัส หรือปิดโบนัสก่อน' : 'ให้ลูกค้าเลือกอย่างอื่น') + '</p></div>');
 				} else {
 					showResult('<div class="result warn"><h2>⚠️ ' + esc(res.message || 'ข้อมูลไม่ถูกต้อง') + '</h2></div>');
 				}
@@ -1060,7 +1099,7 @@
 			const t = s.totals, ev = s.event;
 			const remainingTotal = s.gifts.filter(function (g) { return g.isActive; }).reduce(function (a, g) { return a + g.remaining; }, 0);
 			let html = '<div class="card"><label>ภาพรวม</label><div class="sum-grid">' +
-				'<div><b>' + t.redeemed + '</b><small>แจกแล้ว (รายการ)' + (t.items && t.items !== t.redeemed ? ' · ' + t.items + ' ชิ้น' : '') + '</small></div>' +
+				'<div><b>' + t.redeemed + '</b><small>แจกแล้ว (รายการ)' + (t.items && t.items !== t.redeemed ? ' · ' + t.items + ' ชิ้น' : '') + (t.bonusItems ? ' · ⭐ โบนัส ' + t.bonusItems + ' ชิ้น (' + t.bonusCount + ' รายการ)' : '') + '</small></div>' +
 				'<div class="red"><b>' + t.duplicateAttempts + '</b><small>พยายามแลกซ้ำ</small></div>' +
 				'<div><b>' + t.voided + '</b><small>ยกเลิกรายการ</small></div>' +
 				'<div><b>' + remainingTotal + '</b><small>ของคงเหลือรวม</small></div>' +
@@ -1069,7 +1108,7 @@
 
 			html += '<div class="card"><label>ของรางวัล</label>' + (s.gifts.length ? '<table class="sum">' + s.gifts.map(function (g) {
 				const pct = g.stock ? Math.round(g.used / g.stock * 100) : 0;
-				return '<tr><td>' + esc(g.name) + (g.isActive ? '' : ' <span class="muted">(ซ่อน)</span>') + '</td>' +
+				return '<tr><td>' + (g.isBonus ? '⭐ ' : '') + esc(g.name) + (g.isActive ? '' : ' <span class="muted">(ซ่อน)</span>') + '</td>' +
 					'<td style="width:40%"><div class="bar-wrap"><div class="bar" style="width:' + pct + '%"></div></div></td>' +
 					'<td class="num">' + g.used + '/' + g.stock + '</td></tr>';
 			}).join('') + '</table>' : '<div class="muted">ยังไม่มีของรางวัล</div>') + '</div>';
@@ -1107,13 +1146,13 @@
 		async function exportCsv(eventId) {
 			try {
 				const d = await rpc('event_export', { p_event_id: eventId });
-				const head = ['timestamp', 'member_id', 'bill_no', 'bill_total', 'bill_count', 'bills_detail', 'gift', 'qty', 'staff', 'status', 'matched_by', 'matched_key', 'note', 'photo_count', 'voided_at', 'voided_by'];
+				const head = ['timestamp', 'member_id', 'bill_no', 'bill_total', 'bill_count', 'bills_detail', 'gift', 'qty', 'cat_amount', 'bonus_gift', 'bonus_qty', 'staff', 'status', 'matched_by', 'matched_key', 'note', 'photo_count', 'voided_at', 'voided_by'];
 				const q = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
 				const t = function (v) { return v ? '="' + String(v).replace(/"/g, '') + '"' : ''; }; // กัน Excel ตัด 0 นำหน้า
 				const lines = d.rows.map(function (r) {
 					// bills_detail = เลขบิล:ยอด | เลขบิล:ยอด
 					const detail = (r.bills || []).map(function (b) { return (b.billNo || '-') + (b.amount != null ? ':' + b.amount : ''); }).join(' | ');
-					return [q(r.ts), t(r.memberId), t(r.billNo), r.billAmount == null ? '' : r.billAmount, (r.bills || []).length || '', q(detail), q(r.giftName), r.qty || 1, q(r.staff), q(r.status), q(r.matchedBy), q(r.matchedKey), q(r.note), r.photoCount || '', q(r.voidedAt), q(r.voidedBy)].join(',');
+					return [q(r.ts), t(r.memberId), t(r.billNo), r.billAmount == null ? '' : r.billAmount, (r.bills || []).length || '', q(detail), q(r.giftName), r.qty || 1, r.catAmount == null ? '' : r.catAmount, q(r.bonusGiftName), r.bonusQty || '', q(r.staff), q(r.status), q(r.matchedBy), q(r.matchedKey), q(r.note), r.photoCount || '', q(r.voidedAt), q(r.voidedBy)].join(',');
 				});
 				const csv = '﻿' + head.join(',') + '\n' + lines.join('\n');
 				const a = document.createElement('a');
@@ -1173,7 +1212,8 @@
 			const dedup = [ev.dedupMember ? 'สมาชิก' : null, ev.dedupBill ? 'บิล' : null].filter(Boolean).join(' + ');
 			$('ae-sub').innerHTML = 'สาขา ' + esc(ev.branchCode) + ' · กรอก: ' + esc(fields) + '<br>กันซ้ำด้วย: ' + esc(dedup || 'ไม่กันซ้ำ (แลกซ้ำได้)') +
 				(ev.minBillAmount != null ? ' · ขั้นต่ำ ฿' + money(ev.minBillAmount) : '') +
-				(ev.tiers && ev.tiers.length ? '<br>Tier: ' + esc(tierText(ev.tiers)) + ' ชิ้น' : '');
+				(ev.tiers && ev.tiers.length ? '<br>Tier: ' + esc(tierText(ev.tiers)) + ' ชิ้น' : '') +
+				(ev.bonusRule ? '<br>⭐ โบนัส: ' + esc(ev.bonusRule.label) + ' ครบ ฿' + money(ev.bonusRule.min) : '');
 			$('ae-pill').innerHTML = '<span class="pill ' + (ev.isActive ? 'on' : 'off') + '">' + (ev.isActive ? 'เปิดอยู่' : 'ปิดแล้ว') + '</span>';
 			$('ae-redeem').classList.toggle('hidden', !ev.isActive);
 		}
@@ -1206,7 +1246,7 @@
 		function confirmVoid(row) {
 			const m = $('modal');
 			m.innerHTML = '<div class="modal"><h3 style="margin-top:0">ยกเลิกรายการนี้?</h3>' +
-				'<p>' + describeInput(row) + '<br>รับ <b>' + esc(row.giftName) + qtyTxt(row.qty) + '</b><br><span class="muted" style="font-size:13px">' + esc(row.ts) + (row.staff ? ' โดย ' + esc(row.staff) : '') + '</span></p>' +
+				'<p>' + describeInput(row) + '<br>รับ <b>' + giftLine(row) + '</b><br><span class="muted" style="font-size:13px">' + esc(row.ts) + (row.staff ? ' โดย ' + esc(row.staff) : '') + '</span></p>' +
 				'<p class="muted" style="font-size:13px">ระบบจะคืนของ 1 ชิ้น และข้อมูลนี้แลกใหม่ได้</p>' +
 				'<div class="btns"><button class="btn btn-ghost" id="m-cancel">ไม่ใช่</button>' +
 				'<button class="btn btn-danger" id="m-ok">ยกเลิกรายการ</button></div></div>';
@@ -1326,12 +1366,13 @@
 		const AUDIT_FIELDS = {
 			event_name: 'ชื่อ Event', branch_code: 'รหัสสาขา', is_active: 'เปิดใช้งาน', use_member: 'ช่องรหัสสมาชิก', use_bill_no: 'ช่องเลขที่บิล',
 			use_bill_amount: 'ช่องยอดบิล', use_photos: 'อัปโหลดรูป', use_note: 'หมายเหตุ', dedup_member: 'กันซ้ำด้วยสมาชิก', dedup_bill: 'กันซ้ำด้วยบิล',
-			min_bill_amount: 'ยอดขั้นต่ำ', tiers: 'Tier', gift_name: 'ชื่อของรางวัล', stock: 'จำนวน', image: 'รูป', role: 'สิทธิ์', status: 'สถานะ'
+			min_bill_amount: 'ยอดขั้นต่ำ', tiers: 'Tier', bonus_rule: 'โบนัส', is_bonus: 'เป็นโบนัส', gift_name: 'ชื่อของรางวัล', stock: 'จำนวน', image: 'รูป', role: 'สิทธิ์', status: 'สถานะ'
 		};
 		function auditVal(k, v) {
 			if (v === null || v === undefined || v === '') return '-';
 			if (k === 'image') return v ? 'มีรูป' : 'ไม่มีรูป';
 			if (k === 'tiers') return Array.isArray(v) && v.length ? tierText(v) : '-';
+			if (k === 'bonus_rule') return v && v.label ? v.label + ' ≥ ฿' + money(v.min) : '-';
 			if (v === true) return 'เปิด';
 			if (v === false) return 'ปิด';
 			if (k === 'role') return v === 'admin' ? 'Admin' : 'User';
@@ -1397,13 +1438,14 @@
 				$('ed-dedup-bill').checked = false;
 				$('ed-min').value = '';
 				ED.tiers = [];
+				setBonusFields(null);
 				images = {};
 			} else {
 				try {
 					const d = await rpc('admin_get_event', { p_event_id: eventId });
 					const e = d.event;
 					ED.event = e;
-					ED.gifts = d.gifts.map(function (g) { return { id: g.id, name: g.name, stock: g.stock, used: g.used, image: null, hasImage: g.hasImage }; });
+					ED.gifts = d.gifts.map(function (g) { return { id: g.id, name: g.name, stock: g.stock, used: g.used, image: null, hasImage: g.hasImage, isBonus: !!g.isBonus }; });
 					$('ed-title').textContent = 'ตั้งค่า Event';
 					$('ed-name').value = e.name;
 					$('ed-branch').value = e.branchCode;
@@ -1417,6 +1459,7 @@
 					$('ed-dedup-bill').checked = e.dedupBill;
 					$('ed-min').value = e.minBillAmount == null ? '' : e.minBillAmount;
 					ED.tiers = (e.tiers || []).map(function (t) { return { min: String(t.min), qty: String(t.qty) }; });
+					setBonusFields(e.bonusRule);
 				} catch (err) { handleError(err); return; }
 			}
 			syncEditorChecks();
@@ -1466,6 +1509,18 @@
 			return '<div class="gift-ph">📷</div>';
 		}
 
+		// โบนัส: ยอดสินค้ากลุ่ม ≥ min → ของโบนัส × จำนวนตาม Tier
+		function setBonusFields(b) {
+			$('ed-bonus-on').checked = !!b;
+			$('ed-bonus-label').value = b ? b.label : 'ยอดสินค้าแม่และเด็ก';
+			$('ed-bonus-min').value = b ? b.min : '';
+			syncBonus();
+		}
+		function syncBonus() {
+			$('ed-bonus-box').classList.toggle('hidden', !$('ed-bonus-on').checked);
+			if (typeof renderGiftRows === 'function' && $('ed-gifts')) renderGiftRows();
+		}
+
 		// Tier: ซื้อครบ X บาท → แจก N ชิ้น
 		function renderTierRows() {
 			$('ed-tiers').innerHTML = ED.tiers.map(function (t, i) {
@@ -1494,7 +1549,8 @@
 					'<input class="sm-input g-name" data-i="' + i + '" placeholder="ชื่อของรางวัล" value="' + esc(g.name) + '">' +
 					'<input class="sm-input g-stock" data-i="' + i + '" inputmode="numeric" placeholder="จำนวน" value="' + esc(g.stock) + '">' +
 					'</div><div class="acts"><span class="muted">' + (g.used ? 'แลกไปแล้ว ' + g.used + ' ชิ้น' : '') + '</span>' +
-					'<span>' + (hasPic ? '<button class="chip g g-rmimg" data-i="' + i + '">ลบรูป</button> ' : '') +
+					'<span>' + ($('ed-bonus-on').checked ? '<button class="chip g-bonus' + (g.isBonus ? ' bonus-on' : '') + '" data-i="' + i + '">⭐ ' + (g.isBonus ? 'โบนัส' : 'ตั้งเป็นโบนัส') + '</button> ' : '') +
+					(hasPic ? '<button class="chip g g-rmimg" data-i="' + i + '">ลบรูป</button> ' : '') +
 					'<button class="chip g-del" data-i="' + i + '">ลบ</button></span></div></div></div>';
 			}).join('') || '<div class="muted">ยังไม่มีของรางวัล</div>';
 
@@ -1506,6 +1562,13 @@
 			});
 			$('ed-gifts').querySelectorAll('.g-stock').forEach(function (inp) {
 				inp.addEventListener('input', function () { ED.gifts[Number(inp.dataset.i)].stock = inp.value; });
+			});
+			$('ed-gifts').querySelectorAll('.g-bonus').forEach(function (b) {
+				b.addEventListener('click', function () {
+					const i = Number(b.dataset.i), on = !ED.gifts[i].isBonus;
+					ED.gifts.forEach(function (g, j) { g.isBonus = on && j === i; });
+					renderGiftRows();
+				});
 			});
 			$('ed-gifts').querySelectorAll('.g-rmimg').forEach(function (b) {
 				b.addEventListener('click', function () { const g = ED.gifts[Number(b.dataset.i)]; g.image = null; g.removeImage = true; renderGiftRows(); });
@@ -1582,12 +1645,17 @@
 		async function saveEditor() {
 			const err = $('ed-err');
 			err.textContent = '';
-			const gifts = ED.gifts.map(function (g) { return Object.assign({}, g, { name: String(g.name).trim(), stock: String(g.stock).trim() }); });
+			const bonusOn = $('ed-bonus-on').checked && $('ed-use-amount').checked;
+			const gifts = ED.gifts.map(function (g) { return Object.assign({}, g, { name: String(g.name).trim(), stock: String(g.stock).trim(), isBonus: bonusOn && !!g.isBonus }); });
 			for (let i = 0; i < gifts.length; i++) {
 				if (!gifts[i].name) { err.textContent = 'ของรางวัลชิ้นที่ ' + (i + 1) + ' ยังไม่มีชื่อ'; return; }
 				if (!/^\d+$/.test(gifts[i].stock)) { err.textContent = 'จำนวนของ "' + gifts[i].name + '" ต้องเป็นตัวเลข'; return; }
 			}
 			if (!gifts.length) { err.textContent = 'ต้องมีของรางวัลอย่างน้อย 1 อย่าง'; return; }
+			if ($('ed-bonus-on').checked && $('ed-use-amount').checked) {
+				if (!gifts.some(function (g) { return g.isBonus; })) { err.textContent = 'เปิดโบนัสแล้ว — กด ⭐ เลือกของรางวัลที่เป็นโบนัส 1 อย่าง'; return; }
+				if (!gifts.some(function (g) { return !g.isBonus; })) { err.textContent = 'ต้องมีของรางวัลหลัก (ที่ไม่ใช่โบนัส) อย่างน้อย 1 อย่าง'; return; }
+			}
 
 			const btn = $('ed-save');
 			btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
@@ -1605,7 +1673,8 @@
 					dedupMember: $('ed-dedup-member').checked,
 					dedupBill: $('ed-dedup-bill').checked,
 					minBillAmount: $('ed-min').value.trim() === '' ? null : Number($('ed-min').value.replace(/,/g, '')),
-					tiers: ED.tiers.filter(function (t) { return String(t.min).trim() !== '' || String(t.qty).trim() !== ''; })
+					tiers: ED.tiers.filter(function (t) { return String(t.min).trim() !== '' || String(t.qty).trim() !== ''; }),
+					bonusRule: { enabled: $('ed-bonus-on').checked, label: $('ed-bonus-label').value.trim(), min: $('ed-bonus-min').value.trim() }
 				} });
 				ED.event = ev;
 
@@ -1626,7 +1695,7 @@
 					const g = gifts[i];
 					const saved = await rpc('admin_save_gift', { p_gift: {
 						id: g.id, eventId: ev.id, name: g.name, stock: Number(g.stock), sortOrder: i,
-						image: g.image || null, removeImage: !!g.removeImage
+						image: g.image || null, removeImage: !!g.removeImage, isBonus: !!g.isBonus
 					} });
 					ED.gifts[i].id = saved.id;
 					ED.gifts[i].image = null;
