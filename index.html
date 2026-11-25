@@ -167,6 +167,10 @@
 		.get-row.bonus .q { color:#E82128; }
 		.result .get-row { background:#fff; }
 		.result .get-row.bonus { background:#fff0f0; }
+		.bonus-txt { color:#E82128; font-weight:700; white-space:nowrap; }
+		.stock > div.bonus { background:#fff0f0; box-shadow:inset 0 0 0 2px #E82128; }
+		.stock .bonus-tag { display:inline-block; background:#E82128; color:#fff; font-size:11px; font-weight:700; border-radius:999px; padding:1px 8px; margin-bottom:4px; }
+		.sum-grid .bonus b { color:#E82128; }
 		.bonus-badge { display:inline-block; background:#E82128; color:#fff; border-radius:999px; padding:2px 10px; font-weight:700; }
 		.bonus-box { border:2px dashed #E82128; border-radius:12px; padding:10px; margin-top:10px; background:#fff6f6; }
 		.chip.bonus-on { background:#E82128; color:#fff; border-color:#E82128; }
@@ -515,7 +519,7 @@
 		// ข้อความของที่ได้ในรายการ: ของหลัก × N + โบนัส × N
 		function giftLine(r) {
 			return esc(r.giftName || '-') + qtyTxt(r.qty) +
-				(r.bonusQty > 0 ? ' + <span class="bonus-badge">⭐ ' + esc(r.bonusGiftName || 'โบนัส') + ' × ' + r.bonusQty + '</span>' : '');
+				(r.bonusQty > 0 ? ' · <span class="bonus-txt">⭐ ' + esc(r.bonusGiftName || 'โบนัส') + ' ×' + r.bonusQty + '</span>' : '');
 		}
 
 		// รายการของที่ได้ แยกบรรทัด: [รูป] ชื่อ ×N (โบนัสเป็นแถบแดง)
@@ -527,7 +531,7 @@
 		}
 
 		// "× 3" เมื่อแจกมากกว่า 1 ชิ้น
-		function qtyTxt(q) { return q > 1 ? ' × ' + q : ''; }
+		function qtyTxt(q) { return q > 1 ? '<span style="white-space:nowrap"> ×' + q + '</span>' : ''; }
 		// จำนวนชิ้นตาม Tier (ไม่มี Tier = 1 · ไม่ถึง = 0)
 		function tierQty(tiers, total) {
 			if (!tiers || !tiers.length) return 1;
@@ -742,7 +746,7 @@
 					'</div>');
 			}
 			if (e.bonusRule) f.push('<div class="field bonus-box"><label>⭐ ' + esc(e.bonusRule.label) + ' (บาท)</label>' +
-				'<input id="in-cat" inputmode="decimal" autocomplete="off" placeholder="ดูจากใบเสร็จ · ไม่มีใส่ 0 หรือเว้นว่าง">' +
+				'<input id="in-cat" class="sm-input" inputmode="decimal" autocomplete="off" placeholder="เช่น 250 · ไม่มีเว้นว่าง">' +
 				'<div class="hint" id="cat-hint">ครบ ฿' + money(e.bonusRule.min) + ' ได้โบนัสเพิ่มเท่าจำนวนตาม Tier</div></div>');
 			if (e.useNote) f.push('<div class="field"><label>หมายเหตุ</label><textarea id="in-note" rows="2" placeholder="ไม่บังคับ"></textarea></div>');
 			if (e.usePhotos) f.push('<div class="field"><label>รูปถ่าย (แนบได้หลายรูป)</label>' +
@@ -878,7 +882,7 @@
 			el.innerHTML = gifts.map(function (g) {
 				const cls = stockClass(g);
 				const badge = cls === 'out' ? '<span class="badge">หมดแล้ว</span>' : cls === 'low' ? '<span class="badge">ใกล้หมด</span>' : '';
-				return '<div class="' + cls + '">' + giftImg(g.id) + '<small>' + esc(g.name) + '</small><b>' + g.remaining + '</b>' +
+				return '<div class="' + cls + (g.isBonus && cls !== 'out' && cls !== 'low' ? ' bonus' : '') + '">' + (g.isBonus ? '<span class="bonus-tag">⭐ โบนัส</span>' : '') + giftImg(g.id) + '<small>' + esc(g.name) + '</small><b>' + g.remaining + '</b>' +
 					'<small>จาก ' + g.stock + ' (แลกแล้ว ' + g.used + ')</small>' + (badge ? '<br>' + badge : '') + '</div>';
 			}).join('');
 		}
@@ -1119,7 +1123,9 @@
 			const t = s.totals, ev = s.event;
 			const remainingTotal = s.gifts.filter(function (g) { return g.isActive; }).reduce(function (a, g) { return a + g.remaining; }, 0);
 			let html = '<div class="card"><label>ภาพรวม</label><div class="sum-grid">' +
-				'<div><b>' + t.redeemed + '</b><small>แจกแล้ว (รายการ)' + (t.items && t.items !== t.redeemed ? ' · ' + t.items + ' ชิ้น' : '') + (t.bonusItems ? ' · ⭐ โบนัส ' + t.bonusItems + ' ชิ้น (' + t.bonusCount + ' รายการ)' : '') + '</small></div>' +
+				'<div><b>' + t.redeemed + '</b><small>ลูกค้าที่แลก (รายการ)</small></div>' +
+				(t.items !== t.redeemed || t.bonusItems ? '<div><b>' + t.items + '</b><small>ของรางวัลที่แจก (ชิ้น)</small></div>' : '') +
+				(t.bonusItems ? '<div class="bonus"><b>' + t.bonusItems + '</b><small>⭐ โบนัสที่แจก (ชิ้น)</small></div>' : '') +
 				'<div class="red"><b>' + t.duplicateAttempts + '</b><small>พยายามแลกซ้ำ</small></div>' +
 				'<div><b>' + t.voided + '</b><small>ยกเลิกรายการ</small></div>' +
 				'<div><b>' + remainingTotal + '</b><small>ของคงเหลือรวม</small></div>' +
