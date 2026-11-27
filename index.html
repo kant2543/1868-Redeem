@@ -831,7 +831,7 @@
 
 		function buildInputFields() {
 			const e = S.event, f = [];
-			if (e.useMember) f.push('<div class="field"><label>รหัสสมาชิก</label><input id="in-member" inputmode="numeric" autocomplete="off" placeholder="กรอกรหัสสมาชิก"></div>');
+			if (e.useMember) f.push('<div class="field"><label>รหัสสมาชิก</label><input id="in-member" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="เช่น S1234567"></div>');
 			if (usesBills(e)) {
 				const head = (e.useBillNo ? '<span>เลขที่บิล</span>' : '') + (e.useBillAmount ? '<span class="num">ยอด (บาท)</span>' : '') + '<span></span>';
 				f.push('<div class="field"><div class="bill-head ' + billCols(e) + '">' + head + '</div>' +
@@ -888,7 +888,7 @@
 			const e = S.event;
 			const row = document.createElement('div');
 			row.className = 'bill-row ' + billCols(e);
-			row.innerHTML = (e.useBillNo ? '<input class="bill-no sm-input" autocomplete="off" autocapitalize="characters" placeholder="เลขที่บิล">' : '') +
+			row.innerHTML = (e.useBillNo ? '<input class="bill-no sm-input" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="เช่น SNO211564-156">' : '') +
 				(e.useBillAmount ? '<input class="bill-amt sm-input" inputmode="decimal" autocomplete="off" placeholder="0.00">' : '') +
 				'<button type="button" class="bill-del" title="ลบแถว">✕</button>';
 			$('bill-rows').appendChild(row);
