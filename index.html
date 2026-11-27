@@ -620,6 +620,11 @@
 			if (!rule || !q || cat < Number(rule.min)) return 0;
 			return rule.perStep ? Math.min(Math.floor(cat / Number(rule.min)), q) : q;
 		}
+		// ยอดไม่ถึง Tier แรก (Event ที่ของผูก Tier ยังแลกได้ แต่ต้องเตือน)
+		function firstTier(ev) {
+			const mins = (ev.tiers || []).map(function (t) { return Number(t.min); });
+			return mins.length ? Math.min.apply(null, mins) : null;
+		}
 		function ruleText(ev) {
 			if (ev.stepAmount) return 'ทุก ฿' + money(ev.stepAmount) + ' = 1 ชิ้น';
 			return ev.tiers && ev.tiers.length ? 'Tier ' + tierText(ev.tiers) : '';
@@ -929,7 +934,9 @@
 				const q = tierQty(S.event.tiers, total);
 				const reached = (S.event.tiers || []).filter(function (t) { return total >= Number(t.min); }).map(function (t) { return Number(t.min); });
 				const top = reached.length ? Math.max.apply(null, reached) : 0;
-				$('bill-tier').innerHTML = q ? '<span class="qty-badge">ถึง Tier ฿' + money(top) + (q > 1 ? ' · ได้ ' + q + ' ชิ้น' : '') + '</span>' : 'ยังไม่ถึง Tier ต่ำสุด';
+				$('bill-tier').innerHTML = q ? '<span class="qty-badge">ถึง Tier ฿' + money(top) + (q > 1 ? ' · ได้ ' + q + ' ชิ้น' : '') + '</span>'
+					: total > 0 && S.tierGifts ? '<span class="bonus-badge">❗ ยังไม่ถึง ฿' + money(firstTier(S.event)) + ' · แลกได้แบบ Tier ฿' + money(firstTier(S.event)) + '</span>'
+					: 'ยังไม่ถึง Tier ต่ำสุด';
 			}
 			if ($('cat-hint') && S.event.bonusRule) {
 				const cat = parseAmount($('in-cat').value) || 0, bq = bonusQty(S.event.bonusRule, cat, mainQty(S.event, total));
@@ -973,6 +980,7 @@
 			try {
 				const d = await rpc('event_dashboard', { p_event_id: S.event.id });
 				S.event = d.event;
+				S.tierGifts = d.gifts.some(function (g) { return g.minTotal != null && !g.isBonus; });
 				renderStock($('stock'), d.gifts);
 				renderRecent($('recent'), d.recent, false, S.event.id);
 			} catch (e) { handleError(e, $('err')); }
@@ -1095,7 +1103,8 @@
 			gifts = gifts.filter(function (g) { return !g.isBonus; });
 			const tiered = gifts.some(function (g) { return g.minTotal != null; });
 			const reached = (S.event.tiers || []).map(function (t) { return Number(t.min); }).filter(function (v) { return total >= v; });
-			const top = reached.length ? Math.max.apply(null, reached) : null;
+			const below = tiered && !reached.length;
+			const top = reached.length ? Math.max.apply(null, reached) : (below ? firstTier(S.event) : null);
 			const isMain = function (g) { return tiered && g.minTotal != null && Number(g.minTotal) === top; };
 			// ลำดับ: Tier ที่ถึง → Tier ต่ำกว่า (สูง→ต่ำ) → ทุกยอด → Tier ที่เกินยอด (ต่ำ→สูง)
 			const rank = function (g) {
@@ -1116,7 +1125,9 @@
 				const key = main ? 'main' : String(g.minTotal);
 				if (tiered && key !== lastKey) {
 					lastKey = key;
-					if (main) head = '<div class="tier-head main">⭐ ยอดถึง Tier ฿' + money(top) + '</div>';
+					if (main) head = below
+						? '<div class="tier-head main" style="background:#E82128">❗ ยอด ฿' + money(total) + ' ไม่ถึง ฿' + money(top) + ' · ใช้ Tier ฿' + money(top) + '</div>'
+						: '<div class="tier-head main">⭐ ยอดถึง Tier ฿' + money(top) + '</div>';
 					else {
 						head = (otherShown ? '' : '<div class="tier-other">Tier อื่นๆ</div>') +
 							'<div class="tier-head">' + (g.minTotal == null ? 'ทุกยอด' : 'Tier ฿' + money(g.minTotal) + (over ? ' · เกินยอด' : '')) + '</div>';
@@ -1147,7 +1158,10 @@
 			m.innerHTML = '<div class="modal"><h3 style="margin-top:0">ยืนยันการแลก</h3>' +
 				'<p style="margin-bottom:0">' + describeInput(S.input) + '</p>' +
 				getList({ giftId: g.id, giftName: g.name, qty: giftQty(g), bonusQty: S.input.bonusQty, bonusGiftId: S.input.bonusGift && S.input.bonusGift.id, bonusGiftName: S.input.bonusGift && S.input.bonusGift.name }) +
-				(g.minTotal != null && Number(g.minTotal) > (Number(S.input.billAmount) || 0) ? '<p style="color:var(--red);margin:4px 0">⚠️ ของ Tier ฿' + money(g.minTotal) + ' สูงกว่ายอดลูกค้า (฿' + money(S.input.billAmount) + ')</p>' : '') +
+				(g.minTotal != null && Number(g.minTotal) > (Number(S.input.billAmount) || 0)
+					? '<p style="color:var(--red);margin:4px 0;font-weight:700">❗ ' + (Number(g.minTotal) === firstTier(S.event)
+						? 'ยอด ฿' + money(S.input.billAmount) + ' ยังไม่ถึง ฿' + money(g.minTotal)
+						: 'ของ Tier ฿' + money(g.minTotal) + ' สูงกว่ายอดลูกค้า (฿' + money(S.input.billAmount) + ')') + '</p>' : '') +
 				(S.input.bonusGift && S.input.bonusGift.remaining < S.input.bonusQty ? '<p style="color:var(--red);margin:4px 0">⚠️ ' + esc(S.input.bonusGift.name) + ' เหลือ ' + S.input.bonusGift.remaining + ' ชิ้น ไม่พอ</p>' : '') +
 				(extra ? '<p style="margin:4px 0">' + extra.replace(/^<br>/, '') + '</p>' : '') +
 				'<div class="btns"><button class="btn btn-ghost" id="m-cancel">ยกเลิก</button>' +
