@@ -182,6 +182,9 @@
 		.get-row.bonus .q { color:#E82128; }
 		.result .get-row { background:#fff; }
 		.result .get-row.bonus { background:#fff0f0; }
+		.tier-head { grid-column:1 / -1; font-size:13px; font-weight:700; color:var(--green-dk, #00602A); background:#e8f5ec; border-radius:8px; padding:4px 10px; margin-top:4px; }
+		.gift-btn .tl { font-size:11px; font-weight:700; color:#00782A; }
+		.g-tier { font-size:13px; padding:4px 6px; border:1px solid #cfd8d3; border-radius:8px; background:#fff; max-width:150px; }
 		.bonus-txt { color:#E82128; font-weight:700; white-space:nowrap; }
 		.stock > div.bonus { background:#fff0f0; box-shadow:inset 0 0 0 2px #E82128; }
 		.stock .bonus-tag { display:inline-block; background:#E82128; color:#fff; font-size:11px; font-weight:700; border-radius:999px; padding:1px 8px; margin-bottom:4px; }
@@ -586,6 +589,12 @@
 
 		// "× 3" เมื่อแจกมากกว่า 1 ชิ้น
 		function qtyTxt(q) { return q > 1 ? '<span style="white-space:nowrap"> ×' + q + '</span>' : ''; }
+		// ของรางวัลตาม Tier: จำนวนชิ้นของของชิ้นนี้ (ของที่ผูก Tier = จำนวนของ Tier นั้น)
+		function giftQty(g) {
+			if (g && g.minTotal != null) return tierQty(S.event.tiers, Number(g.minTotal)) || 1;
+			return (S.input && S.input.qty) || 1;
+		}
+
 		// จำนวนชิ้นตาม Tier (ไม่มี Tier = 1 · ไม่ถึง = 0)
 		function tierQty(tiers, total) {
 			if (!tiers || !tiers.length) return 1;
@@ -892,7 +901,9 @@
 			if ($('bill-min')) $('bill-min').classList.toggle('ok-text', min != null && total >= min);
 			if ($('bill-tier')) {
 				const q = tierQty(S.event.tiers, total);
-				$('bill-tier').innerHTML = q ? '<span class="qty-badge">ได้ ' + q + ' ชิ้น</span>' : 'ยังไม่ถึง Tier ต่ำสุด';
+				const reached = (S.event.tiers || []).filter(function (t) { return total >= Number(t.min); }).map(function (t) { return Number(t.min); });
+				const top = reached.length ? Math.max.apply(null, reached) : 0;
+				$('bill-tier').innerHTML = q ? '<span class="qty-badge">ถึง Tier ฿' + money(top) + (q > 1 ? ' · ได้ ' + q + ' ชิ้น' : '') + '</span>' : 'ยังไม่ถึง Tier ต่ำสุด';
 			}
 			if ($('cat-hint') && S.event.bonusRule) {
 				const cat = parseAmount($('in-cat').value) || 0, bq = tierQty(S.event.tiers, total);
@@ -948,7 +959,7 @@
 			el.innerHTML = gifts.map(function (g) {
 				const cls = stockClass(g);
 				const badge = cls === 'out' ? '<span class="badge">หมดแล้ว</span>' : cls === 'low' ? '<span class="badge">ใกล้หมด</span>' : '';
-				return '<div class="' + cls + (g.isBonus && cls !== 'out' && cls !== 'low' ? ' bonus' : '') + '">' + (g.isBonus ? '<span class="bonus-tag">⭐ โบนัส</span>' : '') + giftImg(g.id) + '<small>' + esc(g.name) + '</small><b>' + g.remaining + '</b>' +
+				return '<div class="' + cls + (g.isBonus && cls !== 'out' && cls !== 'low' ? ' bonus' : '') + '">' + (g.isBonus ? '<span class="bonus-tag">⭐ โบนัส</span>' : '') + giftImg(g.id) + '<small>' + esc(g.name) + (g.minTotal != null ? '<br><span style="color:#00782A;font-weight:700">Tier ฿' + money(g.minTotal) + '</span>' : '') + '</small><b>' + g.remaining + '</b>' +
 					'<small>จาก ' + g.stock + ' (แลกแล้ว ' + g.used + ')</small>' + (badge ? '<br>' + badge : '') + '</div>';
 			}).join('');
 		}
@@ -1055,22 +1066,31 @@
 		}
 
 		function showChoices(gifts) {
-			const q = S.input.qty || 1;
-			gifts = gifts.filter(function (g) { return !g.isBonus; });
+			const q = S.input.qty || 1, total = Number(S.input.billAmount) || 0;
+			// ของหลักที่ยอดถึง (ของตาม Tier: เลือกได้จาก Tier ที่ถึงหรือต่ำกว่า)
+			gifts = gifts.filter(function (g) { return !g.isBonus && (g.minTotal == null || total >= Number(g.minTotal)); });
+			const tiered = gifts.some(function (g) { return g.minTotal != null; });
+			if (tiered) gifts.sort(function (a, b) { return (Number(b.minTotal) || 0) - (Number(a.minTotal) || 0); });
 			// ของหลักมีอย่างเดียว → ระบบเลือกให้ ไปหน้ายืนยันเลย
-			if (gifts.length === 1 && gifts[0].remaining >= q) { S.autoGift = true; confirmGift(gifts[0]); return; }
+			if (gifts.length === 1 && gifts[0].remaining >= giftQty(gifts[0])) { S.autoGift = true; confirmGift(gifts[0]); return; }
 			S.autoGift = false;
+			let lastTier;
 			const btns = gifts.map(function (g) {
-				const short = g.remaining < q;
-				return '<button class="gift-btn" data-id="' + g.id + '"' + (short ? ' disabled' : '') + '>' + giftImg(g.id) +
-					'<div class="n">' + esc(g.name) + '</div>' +
+				const gq = giftQty(g), short = g.remaining < gq;
+				let head = '';
+				if (tiered && g.minTotal !== lastTier) {
+					lastTier = g.minTotal;
+					head = '<div class="tier-head">' + (g.minTotal == null ? 'ทุกยอด' : 'Tier ฿' + money(g.minTotal) + ' ขึ้นไป') + '</div>';
+				}
+				return head + '<button class="gift-btn" data-id="' + g.id + '"' + (short ? ' disabled' : '') + '>' + giftImg(g.id) +
+					'<div class="n">' + esc(g.name) + (gq > 1 ? ' ×' + gq : '') + '</div>' +
 					'<div class="r">' + (g.remaining <= 0 ? 'หมดแล้ว' : short ? 'เหลือ ' + g.remaining + ' ชิ้น ไม่พอ' : 'เหลือ ' + g.remaining + ' ชิ้น') + '</div></button>';
 			}).join('');
 			$('step-input').classList.add('hidden');
 			$('step-result').innerHTML = '<div class="card"><label>✅ ' + describeInput(S.input) + ' — เลือกของรางวัล</label>' +
-				(q > 1 || S.input.bonusQty ? '<div style="margin:4px 0 8px">' + (q > 1 ? '<span class="qty-badge">ได้ ' + q + ' ชิ้น</span> ' : '') +
+				(!tiered && q > 1 || S.input.bonusQty ? '<div style="margin:4px 0 8px">' + (!tiered && q > 1 ? '<span class="qty-badge">ได้ ' + q + ' ชิ้น</span> ' : '') +
 					(S.input.bonusQty ? '<span class="bonus-badge">⭐ + ' + esc(S.input.bonusGift.name) + ' × ' + S.input.bonusQty + '</span>' : '') + '</div>' : '') +
-				(gifts.length ? '<div class="gift-grid">' + btns + '</div>' : '<div class="muted">Event นี้ยังไม่มีของรางวัล</div>') +
+				(gifts.length ? (tiered ? '<div class="muted" style="font-size:13px;margin-bottom:6px">เลือกได้จาก Tier ที่ถึง หรือ Tier ต่ำกว่า</div>' : '') + '<div class="gift-grid">' + btns + '</div>' : '<div class="muted">ยอดนี้ยังไม่มีของรางวัลที่แลกได้</div>') +
 				'<button class="btn btn-ghost" onclick="resetStaff()">ยกเลิก</button></div>';
 			$('step-result').classList.remove('hidden');
 			$('step-result').querySelectorAll('.gift-btn').forEach(function (b) {
@@ -1085,7 +1105,7 @@
 				(S.photos && S.photos.length ? '<br><span class="muted">📷 ' + S.photos.length + ' รูป</span>' : '');
 			m.innerHTML = '<div class="modal"><h3 style="margin-top:0">ยืนยันการแลก</h3>' +
 				'<p style="margin-bottom:0">' + describeInput(S.input) + '</p>' +
-				getList({ giftId: g.id, giftName: g.name, qty: S.input.qty, bonusQty: S.input.bonusQty, bonusGiftId: S.input.bonusGift && S.input.bonusGift.id, bonusGiftName: S.input.bonusGift && S.input.bonusGift.name }) +
+				getList({ giftId: g.id, giftName: g.name, qty: giftQty(g), bonusQty: S.input.bonusQty, bonusGiftId: S.input.bonusGift && S.input.bonusGift.id, bonusGiftName: S.input.bonusGift && S.input.bonusGift.name }) +
 				(S.input.bonusGift && S.input.bonusGift.remaining < S.input.bonusQty ? '<p style="color:var(--red);margin:4px 0">⚠️ ' + esc(S.input.bonusGift.name) + ' เหลือ ' + S.input.bonusGift.remaining + ' ชิ้น ไม่พอ</p>' : '') +
 				(extra ? '<p style="margin:4px 0">' + extra.replace(/^<br>/, '') + '</p>' : '') +
 				'<div class="btns"><button class="btn btn-ghost" id="m-cancel">ยกเลิก</button>' +
@@ -1537,7 +1557,7 @@
 					const d = await rpc('admin_get_event', { p_event_id: eventId });
 					const e = d.event;
 					ED.event = e;
-					ED.gifts = d.gifts.map(function (g) { return { id: g.id, name: g.name, stock: g.stock, used: g.used, image: null, hasImage: g.hasImage, isBonus: !!g.isBonus }; });
+					ED.gifts = d.gifts.map(function (g) { return { id: g.id, name: g.name, stock: g.stock, used: g.used, image: null, hasImage: g.hasImage, isBonus: !!g.isBonus, minTotal: g.minTotal == null ? null : Number(g.minTotal) }; });
 					$('ed-title').textContent = 'ตั้งค่า Event';
 					$('ed-name').value = e.name;
 					$('ed-branch').value = e.branchCode;
@@ -1573,6 +1593,7 @@
 			if (!useM) $('ed-dedup-member').checked = false;
 			if (!useB) $('ed-dedup-bill').checked = false;
 			$('ed-dedup-none').classList.toggle('hidden', $('ed-dedup-member').checked || $('ed-dedup-bill').checked);
+			if ($('ed-gifts') && ED.gifts) renderGiftRows();
 			$('ed-dedup-member').disabled = locked || !useM;
 			$('ed-dedup-bill').disabled = locked || !useB;
 			$('ed-dedup-member-row').classList.toggle('disabled', locked || !useM);
@@ -1622,7 +1643,8 @@
 			}).join('');
 			$('ed-tiers').querySelectorAll('.t-min').forEach(function (inp) { inp.addEventListener('input', function () { ED.tiers[Number(inp.dataset.i)].min = inp.value; }); });
 			$('ed-tiers').querySelectorAll('.t-qty').forEach(function (inp) { inp.addEventListener('input', function () { ED.tiers[Number(inp.dataset.i)].qty = inp.value; }); });
-			$('ed-tiers').querySelectorAll('.t-del').forEach(function (b) { b.addEventListener('click', function () { ED.tiers.splice(Number(b.dataset.i), 1); renderTierRows(); }); });
+			$('ed-tiers').querySelectorAll('.t-del').forEach(function (b) { b.addEventListener('click', function () { ED.tiers.splice(Number(b.dataset.i), 1); renderTierRows(); renderGiftRows(); }); });
+			$('ed-tiers').querySelectorAll('.t-min').forEach(function (inp) { inp.addEventListener('change', renderGiftRows); });
 		}
 		function addTier() {
 			const last = ED.tiers[ED.tiers.length - 1];
@@ -1630,6 +1652,19 @@
 			renderTierRows();
 			const mins = $('ed-tiers').querySelectorAll('.t-min');
 			mins[mins.length - 1].focus();
+		}
+
+		// dropdown "ของชิ้นนี้อยู่ Tier ไหน" (มี Tier + ใช้ยอดบิล + ไม่ใช่โบนัส)
+		function tierSelect(g, i) {
+			const mins = ED.tiers.map(function (t) { return Number(String(t.min).replace(/,/g, '')); })
+				.filter(function (v) { return v > 0; })
+				.sort(function (a, b) { return a - b; });
+			if (!mins.length || !$('ed-use-amount').checked || g.isBonus) return '';
+			if (g.minTotal != null && mins.indexOf(Number(g.minTotal)) < 0) mins.push(Number(g.minTotal));
+			return '<div style="margin-top:6px"><span class="muted" style="font-size:13px">อยู่ Tier: </span><select class="g-tier" data-i="' + i + '">' +
+				'<option value="">ทุกยอด</option>' +
+				mins.map(function (v) { return '<option value="' + v + '"' + (Number(g.minTotal) === v ? ' selected' : '') + '>฿' + money(v) + ' ขึ้นไป</option>'; }).join('') +
+				'</select></div>';
 		}
 
 		function renderGiftRows() {
@@ -1640,7 +1675,7 @@
 					'<div><div class="cols">' +
 					'<input class="sm-input g-name" data-i="' + i + '" placeholder="ชื่อของรางวัล" value="' + esc(g.name) + '">' +
 					'<input class="sm-input g-stock" data-i="' + i + '" inputmode="numeric" placeholder="จำนวน" value="' + esc(g.stock) + '">' +
-					'</div><div class="acts"><span class="muted">' + (g.used ? 'แลกไปแล้ว ' + g.used + ' ชิ้น' : '') + '</span>' +
+					'</div>' + tierSelect(g, i) + '<div class="acts"><span class="muted">' + (g.used ? 'แลกไปแล้ว ' + g.used + ' ชิ้น' : '') + '</span>' +
 					'<span>' + ($('ed-bonus-on').checked ? '<button class="chip g-bonus' + (g.isBonus ? ' bonus-on' : '') + '" data-i="' + i + '">⭐ ' + (g.isBonus ? 'โบนัส' : 'ตั้งเป็นโบนัส') + '</button> ' : '') +
 					(hasPic ? '<button class="chip g g-rmimg" data-i="' + i + '">ลบรูป</button> ' : '') +
 					'<button class="chip g-del" data-i="' + i + '">ลบ</button></span></div></div></div>';
@@ -1654,6 +1689,9 @@
 			});
 			$('ed-gifts').querySelectorAll('.g-stock').forEach(function (inp) {
 				inp.addEventListener('input', function () { ED.gifts[Number(inp.dataset.i)].stock = inp.value; });
+			});
+			$('ed-gifts').querySelectorAll('.g-tier').forEach(function (sel) {
+				sel.addEventListener('change', function () { ED.gifts[Number(sel.dataset.i)].minTotal = sel.value === '' ? null : Number(sel.value); });
 			});
 			$('ed-gifts').querySelectorAll('.g-bonus').forEach(function (b) {
 				b.addEventListener('click', function () {
@@ -1787,7 +1825,8 @@
 					const g = gifts[i];
 					const saved = await rpc('admin_save_gift', { p_gift: {
 						id: g.id, eventId: ev.id, name: g.name, stock: Number(g.stock), sortOrder: i,
-						image: g.image || null, removeImage: !!g.removeImage, isBonus: !!g.isBonus
+						image: g.image || null, removeImage: !!g.removeImage, isBonus: !!g.isBonus,
+						minTotal: !g.isBonus && $('ed-use-amount').checked && g.minTotal != null ? g.minTotal : null
 					} });
 					ED.gifts[i].id = saved.id;
 					ED.gifts[i].image = null;
