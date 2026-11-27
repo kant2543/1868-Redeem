@@ -183,6 +183,9 @@
 		.result .get-row { background:#fff; }
 		.result .get-row.bonus { background:#fff0f0; }
 		.tier-head { grid-column:1 / -1; font-size:13px; font-weight:700; color:var(--green-dk, #00602A); background:#e8f5ec; border-radius:8px; padding:4px 10px; margin-top:4px; }
+		.tier-head.main { background:#00AE3D; color:#fff; font-size:15px; padding:6px 12px; }
+		.tier-other { grid-column:1 / -1; font-size:14px; font-weight:700; color:var(--muted); border-top:2px dashed #d5e3da; padding-top:12px; margin-top:10px; }
+		.gift-btn.other { transform:scale(.96); opacity:.92; }
 		.gift-btn .tl { font-size:11px; font-weight:700; color:#00782A; }
 		.g-tier { font-size:13px; padding:4px 6px; border:1px solid #cfd8d3; border-radius:8px; background:#fff; max-width:150px; }
 		.bonus-txt { color:#E82128; font-weight:700; white-space:nowrap; }
@@ -1067,22 +1070,39 @@
 
 		function showChoices(gifts) {
 			const q = S.input.qty || 1, total = Number(S.input.billAmount) || 0;
-			// ของหลักที่ยอดถึง (ของตาม Tier: เลือกได้จาก Tier ที่ถึงหรือต่ำกว่า)
-			gifts = gifts.filter(function (g) { return !g.isBonus && (g.minTotal == null || total >= Number(g.minTotal)); });
+			// ของหลักทุกชิ้น (ของตาม Tier: Tier ที่ยอดถึงขึ้นด้านบน · Tier อื่นๆ อยู่ด้านล่าง เลือกได้หมด)
+			gifts = gifts.filter(function (g) { return !g.isBonus; });
 			const tiered = gifts.some(function (g) { return g.minTotal != null; });
-			if (tiered) gifts.sort(function (a, b) { return (Number(b.minTotal) || 0) - (Number(a.minTotal) || 0); });
-			// ของหลักมีอย่างเดียว → ระบบเลือกให้ ไปหน้ายืนยันเลย
-			if (gifts.length === 1 && gifts[0].remaining >= giftQty(gifts[0])) { S.autoGift = true; confirmGift(gifts[0]); return; }
+			const reached = (S.event.tiers || []).map(function (t) { return Number(t.min); }).filter(function (v) { return total >= v; });
+			const top = reached.length ? Math.max.apply(null, reached) : null;
+			const isMain = function (g) { return tiered && g.minTotal != null && Number(g.minTotal) === top; };
+			// ลำดับ: Tier ที่ถึง → Tier ต่ำกว่า (สูง→ต่ำ) → ทุกยอด → Tier ที่เกินยอด (ต่ำ→สูง)
+			const rank = function (g) {
+				if (isMain(g)) return [0, 0];
+				if (g.minTotal == null) return [2, 0];
+				const v = Number(g.minTotal);
+				return v <= total ? [1, -v] : [3, v];
+			};
+			if (tiered) gifts.sort(function (a, b) { const x = rank(a), y = rank(b); return (x[0] - y[0]) || (x[1] - y[1]); });
+			// ของหลักมีอย่างเดียว (ไม่มี Tier) → ระบบเลือกให้ ไปหน้ายืนยันเลย
+			if (!tiered && gifts.length === 1 && gifts[0].remaining >= giftQty(gifts[0])) { S.autoGift = true; confirmGift(gifts[0]); return; }
 			S.autoGift = false;
-			let lastTier;
+			let lastKey, otherShown = false;
 			const btns = gifts.map(function (g) {
-				const gq = giftQty(g), short = g.remaining < gq;
+				const gq = giftQty(g), short = g.remaining < gq, main = isMain(g);
+				const over = g.minTotal != null && Number(g.minTotal) > total;
 				let head = '';
-				if (tiered && g.minTotal !== lastTier) {
-					lastTier = g.minTotal;
-					head = '<div class="tier-head">' + (g.minTotal == null ? 'ทุกยอด' : 'Tier ฿' + money(g.minTotal) + ' ขึ้นไป') + '</div>';
+				const key = main ? 'main' : String(g.minTotal);
+				if (tiered && key !== lastKey) {
+					lastKey = key;
+					if (main) head = '<div class="tier-head main">⭐ ยอดถึง Tier ฿' + money(top) + '</div>';
+					else {
+						head = (otherShown ? '' : '<div class="tier-other">Tier อื่นๆ</div>') +
+							'<div class="tier-head">' + (g.minTotal == null ? 'ทุกยอด' : 'Tier ฿' + money(g.minTotal) + (over ? ' · เกินยอด' : '')) + '</div>';
+						otherShown = true;
+					}
 				}
-				return head + '<button class="gift-btn" data-id="' + g.id + '"' + (short ? ' disabled' : '') + '>' + giftImg(g.id) +
+				return head + '<button class="gift-btn' + (tiered && !main ? ' other' : '') + '" data-id="' + g.id + '"' + (short ? ' disabled' : '') + '>' + giftImg(g.id) +
 					'<div class="n">' + esc(g.name) + (gq > 1 ? ' ×' + gq : '') + '</div>' +
 					'<div class="r">' + (g.remaining <= 0 ? 'หมดแล้ว' : short ? 'เหลือ ' + g.remaining + ' ชิ้น ไม่พอ' : 'เหลือ ' + g.remaining + ' ชิ้น') + '</div></button>';
 			}).join('');
@@ -1090,7 +1110,7 @@
 			$('step-result').innerHTML = '<div class="card"><label>✅ ' + describeInput(S.input) + ' — เลือกของรางวัล</label>' +
 				(!tiered && q > 1 || S.input.bonusQty ? '<div style="margin:4px 0 8px">' + (!tiered && q > 1 ? '<span class="qty-badge">ได้ ' + q + ' ชิ้น</span> ' : '') +
 					(S.input.bonusQty ? '<span class="bonus-badge">⭐ + ' + esc(S.input.bonusGift.name) + ' × ' + S.input.bonusQty + '</span>' : '') + '</div>' : '') +
-				(gifts.length ? (tiered ? '<div class="muted" style="font-size:13px;margin-bottom:6px">เลือกได้จาก Tier ที่ถึง หรือ Tier ต่ำกว่า</div>' : '') + '<div class="gift-grid">' + btns + '</div>' : '<div class="muted">ยอดนี้ยังไม่มีของรางวัลที่แลกได้</div>') +
+				(gifts.length ?  '<div class="gift-grid">' + btns + '</div>' : '<div class="muted">ยอดนี้ยังไม่มีของรางวัลที่แลกได้</div>') +
 				'<button class="btn btn-ghost" onclick="resetStaff()">ยกเลิก</button></div>';
 			$('step-result').classList.remove('hidden');
 			$('step-result').querySelectorAll('.gift-btn').forEach(function (b) {
@@ -1106,6 +1126,7 @@
 			m.innerHTML = '<div class="modal"><h3 style="margin-top:0">ยืนยันการแลก</h3>' +
 				'<p style="margin-bottom:0">' + describeInput(S.input) + '</p>' +
 				getList({ giftId: g.id, giftName: g.name, qty: giftQty(g), bonusQty: S.input.bonusQty, bonusGiftId: S.input.bonusGift && S.input.bonusGift.id, bonusGiftName: S.input.bonusGift && S.input.bonusGift.name }) +
+				(g.minTotal != null && Number(g.minTotal) > (Number(S.input.billAmount) || 0) ? '<p style="color:var(--red);margin:4px 0">⚠️ ของ Tier ฿' + money(g.minTotal) + ' สูงกว่ายอดลูกค้า (฿' + money(S.input.billAmount) + ')</p>' : '') +
 				(S.input.bonusGift && S.input.bonusGift.remaining < S.input.bonusQty ? '<p style="color:var(--red);margin:4px 0">⚠️ ' + esc(S.input.bonusGift.name) + ' เหลือ ' + S.input.bonusGift.remaining + ' ชิ้น ไม่พอ</p>' : '') +
 				(extra ? '<p style="margin:4px 0">' + extra.replace(/^<br>/, '') + '</p>' : '') +
 				'<div class="btns"><button class="btn btn-ghost" id="m-cancel">ยกเลิก</button>' +
