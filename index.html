@@ -183,6 +183,16 @@
 		.get-row .q { font-size:28px; font-weight:800; white-space:nowrap; }
 		.get-row.bonus .q { color:#E82128; }
 		.result .get-row { background:#fff; }
+		.topup-btn { width:100%; margin:0 0 12px; border:2px dashed #00AE3D; background:#f1fbf4; color:#00782A; font-weight:700; font-size:15px; border-radius:12px; padding:10px; cursor:pointer; }
+		.topup-box { border:2px solid #00AE3D; background:#f1fbf4; border-radius:14px; padding:10px 12px; margin:0 0 12px; }
+		.topup-box .hd { display:flex; justify-content:space-between; align-items:center; gap:8px; font-weight:700; color:#00782A; }
+		.topup-box .got { font-size:14px; margin-top:6px; }
+		.topup-item { display:block; width:100%; text-align:left; border:2px solid #d5eadc; background:#fff; border-radius:12px; padding:10px 12px; margin:0 0 8px; cursor:pointer; font-size:14px; color:#1a1a1a; }
+		.topup-item:hover { border-color:#00AE3D; }
+		.topup-item .b { font-weight:700; font-size:15px; word-break:break-all; }
+		.topup-item .m { color:var(--muted); font-size:13px; margin-top:2px; }
+		.topup-sum { background:#fff; border-radius:10px; padding:8px 10px; margin:8px 0 0; font-size:14px; color:#1a1a1a; text-align:left; }
+		.tag.t { background:#00AE3D; color:#fff; }
 		.result .get-row.bonus { background:#fff0f0; }
 		.tier-head { grid-column:1 / -1; font-size:13px; font-weight:700; color:var(--green-dk, #00602A); background:#e8f5ec; border-radius:8px; padding:4px 10px; margin-top:4px; }
 		.tier-head.main { background:#00AE3D; color:#fff; font-size:15px; padding:6px 12px; }
@@ -585,14 +595,15 @@
 
 		// ข้อความของที่ได้ในรายการ: ของหลัก × N + โบนัส × N
 		function giftLine(r) {
-			return esc(r.giftName || '-') + qtyTxt(r.qty) +
-				(r.bonusQty > 0 ? ' · <span class="bonus-txt">⭐ ' + esc(r.bonusGiftName || 'โบนัส') + ' ×' + r.bonusQty + '</span>' : '');
+			const main = r.qty === 0 ? '' : esc(r.giftName || '-') + qtyTxt(r.qty);
+			const bonus = r.bonusQty > 0 ? '<span class="bonus-txt">⭐ ' + esc(r.bonusGiftName || 'โบนัส') + ' ×' + r.bonusQty + '</span>' : '';
+			return (main && bonus ? main + ' · ' + bonus : main || bonus || '-');
 		}
 
 		// รายการของที่ได้ แยกบรรทัด: [รูป] ชื่อ ×N (โบนัสเป็นแถบแดง)
 		function getList(r) {
-			let h = '<div class="get-list">' +
-				'<div class="get-row">' + giftImg(r.giftId) + '<div class="nm"><span class="tg">🎁 ของรางวัล</span>' + esc(r.giftName || '-') + '</div><div class="q">×' + (r.qty || 1) + '</div></div>';
+			let h = '<div class="get-list">' + (r.qty === 0 ? '' :
+				'<div class="get-row">' + giftImg(r.giftId) + '<div class="nm"><span class="tg">🎁 ของรางวัล</span>' + esc(r.giftName || '-') + '</div><div class="q">×' + (r.qty == null ? 1 : r.qty) + '</div></div>');
 			if (r.bonusQty > 0) h += '<div class="get-row bonus">' + giftImg(r.bonusGiftId) + '<div class="nm"><span class="tg">⭐ โบนัส</span>' + esc(r.bonusGiftName || 'โบนัส') + '</div><div class="q">×' + r.bonusQty + '</div></div>';
 			return h + '</div>';
 		}
@@ -602,7 +613,7 @@
 		// ของรางวัลตาม Tier: จำนวนชิ้นของของชิ้นนี้ (ของที่ผูก Tier = จำนวนของ Tier นั้น)
 		function giftQty(g) {
 			if (g && g.minTotal != null) return tierQty(S.event.tiers, Number(g.minTotal)) || 1;
-			return (S.input && S.input.qty) || 1;
+			return S.input && S.input.qty != null ? S.input.qty : 1;
 		}
 
 		// จำนวนชิ้นตาม Tier (ไม่มี Tier = 1 · ไม่ถึง = 0)
@@ -843,7 +854,8 @@
 
 		function buildInputFields() {
 			const e = S.event, f = [];
-			if (e.useMember) f.push('<div class="field"><label>รหัสสมาชิก</label><input id="in-member" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="เช่น S1234567"></div>');
+			if (e.stepAmount && usesBills(e)) f.push(topupBar());
+			if (e.useMember && !S.topup) f.push('<div class="field"><label>รหัสสมาชิก</label><input id="in-member" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="เช่น S1234567"></div>');
 			if (usesBills(e)) {
 				const head = (e.useBillNo ? '<span>เลขที่บิล</span>' : '') + (e.useBillAmount ? '<span class="num">ยอด (บาท)</span>' : '') + '<span></span>';
 				f.push('<div class="field"><div class="bill-head ' + billCols(e) + '">' + head + '</div>' +
@@ -855,7 +867,7 @@
 							: e.tiers && e.tiers.length ? '<div class="hint">Tier: ' + tierText(e.tiers) + ' ชิ้น</div><div class="hint" id="bill-tier"></div>' : '') : '') +
 					'</div>');
 			}
-			if (e.bonusRule) f.push('<div class="field bonus-box"><label>⭐ ' + esc(e.bonusRule.label) + ' (บาท)</label>' +
+			if (e.bonusRule) f.push('<div class="field bonus-box"><label>⭐ ' + esc(e.bonusRule.label) + (S.topup ? ' เฉพาะบิลใหม่' : '') + ' (บาท)</label>' +
 				'<input id="in-cat" class="sm-input" inputmode="decimal" autocomplete="off" placeholder="เช่น 250 · ไม่มีเว้นว่าง">' +
 				'<div class="hint" id="cat-hint">' + bonusHint(e.bonusRule) + '</div></div>');
 			if (e.useNote) f.push('<div class="field"><label>หมายเหตุ</label><textarea id="in-note" rows="2" placeholder="ไม่บังคับ"></textarea></div>');
@@ -867,6 +879,7 @@
 
 			S.photos = [];
 			if (usesBills(e)) addBillRow(false);
+			if (S.topup) updateBillTotal();
 			if (e.usePhotos) {
 				$('in-photo-file').addEventListener('change', async function () {
 					const files = Array.prototype.slice.call(this.files || []);
@@ -934,6 +947,15 @@
 			$('bill-total').textContent = '฿' + money(total);
 			const min = S.event.minBillAmount;
 			if ($('bill-min')) $('bill-min').classList.toggle('ok-text', min != null && total >= min);
+			if ($('bill-tier') && S.event.stepAmount && S.topup) {
+				const g = S.topup, cat = $('in-cat') ? parseAmount($('in-cat').value) || 0 : 0;
+				const q = mainQty(S.event, Number(g.total) + total), bq = bonusQty(S.event.bonusRule, Number(g.cat) + cat, q);
+				const addQ = Math.max(q - g.qty, 0), addB = Math.max(bq - g.bonusQty, 0);
+				$('bill-tier').innerHTML = 'รวมบิลเดิม ฿' + money(Number(g.total) + total) + ' → ' +
+					(addQ || addB ? '<span class="qty-badge">ได้เพิ่ม' + (addQ ? ' ' + esc(g.giftName) + ' ' + addQ : '') + (addQ && addB ? ' ·' : '') + (addB ? ' ⭐ ' + addB : '') + '</span>' : 'ยังไม่ได้เพิ่ม');
+				if ($('cat-hint')) $('cat-hint').innerHTML = S.event.bonusRule ? 'รวมเดิม ฿' + money(Number(g.cat) + cat) + ' · ' + bonusHint(S.event.bonusRule) : '';
+				return;
+			}
 			if ($('bill-tier') && S.event.stepAmount) {
 				const q = mainQty(S.event, total);
 				$('bill-tier').innerHTML = q ? '<span class="qty-badge">ได้ ' + q + ' ชิ้น</span>' : 'ยังไม่ถึง ฿' + money(S.event.stepAmount);
@@ -1006,7 +1028,7 @@
 		function renderRecent(el, rows, canVoid, eventId) {
 			if (!rows.length) { el.innerHTML = '<div class="muted">ยังไม่มีรายการ</div>'; return; }
 			el.innerHTML = rows.map(function (x) {
-				const tag = x.status === 'REDEEMED' ? '<span class="tag r">รับ</span>'
+				const tag = x.status === 'REDEEMED' ? (x.parentId ? '<span class="tag t">เพิ่ม</span>' : '<span class="tag r">รับ</span>')
 					: x.status === 'DUPLICATE_ATTEMPT' ? '<span class="tag d">ซ้ำ</span>'
 					: '<span class="tag v">ยกเลิก</span>';
 				const icons = (x.photoCount ? ' 📷' + x.photoCount : '') + (x.note ? ' 📝' : '');
@@ -1044,6 +1066,7 @@
 					'<div style="margin:8px 0 4px">' + statusTxt + '</div>' +
 					(r.memberId ? '<div class="kv"><span>รหัสสมาชิก</span><b>' + esc(r.memberId) + '</b></div>' : '') +
 					'<div class="kv"><span>ของรางวัล</span><b>' + giftLine(r) + '</b></div>' +
+					(r.parentId ? '<div class="kv"><span>ประเภท</span><span><span class="tag t">รับเพิ่ม</span> ต่อจากรายการ #' + r.parentId + '</span></div>' : '') +
 					(r.catAmount != null ? '<div class="kv"><span>ยอดกลุ่มโบนัส</span><span>฿' + money(r.catAmount) + '</span></div>' : '') +
 					'<div class="kv"><span>เวลา</span><span>' + esc(r.ts) + '</span></div>' +
 					(r.staff ? '<div class="kv"><span>พนักงาน</span><span>' + esc(r.staff) + '</span></div>' : '') +
@@ -1077,6 +1100,14 @@
 			btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...';
 			try {
 				if (inp.cat !== null && isNaN(inp.cat)) { setErr('ยอด' + (S.event.bonusRule ? S.event.bonusRule.label : '') + ' ไม่ถูกต้อง'); btn.disabled = false; btn.textContent = 'ตรวจสอบ'; return; }
+				if (S.topup) {
+					const tr = await rpc('staff_topup_check', { p_event_id: S.event.id, p_parent_id: S.topup.rootId, p_bills: inp.bills, p_cat_amount: inp.cat });
+					if (!tr.ok) setErr(tr.message);
+					else if (tr.duplicate) showDuplicate(tr.prev, tr.matchedBy, 0, tr.matchedKey);
+					else { S.input = tr.input; S.input.topup = tr.group; S.input.after = tr.after; S.note = inp.note; confirmGift(tr.gift); }
+					btn.disabled = false; btn.textContent = 'ตรวจสอบ';
+					return;
+				}
 				const res = await rpc('staff_check', { p_event_id: S.event.id, p_member_id: inp.member, p_bills: inp.bills, p_staff: staffName(), p_cat_amount: inp.cat });
 				if (!res.ok) setErr(res.message);
 				else if (res.duplicate) showDuplicate(res.prev, res.matchedBy, res.attempts, res.matchedKey);
@@ -1162,8 +1193,10 @@
 			const m = $('modal');
 			const extra = (S.note ? '<br><span class="muted">📝 ' + esc(S.note) + '</span>' : '') +
 				(S.photos && S.photos.length ? '<br><span class="muted">📷 ' + S.photos.length + ' รูป</span>' : '');
-			m.innerHTML = '<div class="modal"><h3 style="margin-top:0">ยืนยันการแลก</h3>' +
-				'<p style="margin-bottom:0">' + describeInput(S.input) + '</p>' +
+			const tp = S.input.topup;
+			m.innerHTML = '<div class="modal"><h3 style="margin-top:0">' + (tp ? '➕ ยืนยันรับเพิ่ม' : 'ยืนยันการแลก') + '</h3>' +
+				'<p style="margin-bottom:0">' + (tp ? 'บิลใหม่ · ' : '') + describeInput(S.input) + '</p>' +
+				(tp ? topupSummary(tp, S.input.after) : '') +
 				getList({ giftId: g.id, giftName: g.name, qty: giftQty(g), bonusQty: S.input.bonusQty, bonusGiftId: S.input.bonusGift && S.input.bonusGift.id, bonusGiftName: S.input.bonusGift && S.input.bonusGift.name }) +
 				(g.minTotal != null && Number(g.minTotal) > (Number(S.input.billAmount) || 0)
 					? '<p style="color:var(--red);margin:4px 0;font-weight:700">❗ ' + (Number(g.minTotal) === firstTier(S.event)
@@ -1183,24 +1216,36 @@
 			const btn = $('m-ok');
 			btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
 			try {
-				const res = await rpc('staff_redeem', {
-					p_event_id: S.event.id,
-					p_member_id: S.input.memberId,
-					p_bills: S.input.bills,
-					p_gift_id: g.id, p_staff: staffName(),
-					p_note: S.note || null,
-					p_cat_amount: S.input.catAmount == null ? null : S.input.catAmount
-				});
+				const tp = S.input.topup;
+				const res = tp
+					? await rpc('staff_topup_redeem', {
+						p_event_id: S.event.id,
+						p_parent_id: tp.rootId,
+						p_bills: S.input.bills,
+						p_staff: staffName(),
+						p_note: S.note || null,
+						p_cat_amount: S.input.catAmount == null ? null : S.input.catAmount
+					})
+					: await rpc('staff_redeem', {
+						p_event_id: S.event.id,
+						p_member_id: S.input.memberId,
+						p_bills: S.input.bills,
+						p_gift_id: g.id, p_staff: staffName(),
+						p_note: S.note || null,
+						p_cat_amount: S.input.catAmount == null ? null : S.input.catAmount
+					});
 				closeModal();
 				if (res.ok) {
 					const r = res.redemption;
-					showResult('<div class="result ok"><h2>✅ แลกสำเร็จ</h2>' +
+					showResult('<div class="result ok"><h2>' + (tp ? '✅ รับเพิ่มสำเร็จ' : '✅ แลกสำเร็จ') + '</h2>' +
 						(r.memberId ? '<p>สมาชิก ' + esc(r.memberId) + '</p>' : '') +
 						getList(r) + '<p>' + esc(r.ts) + '</p>' +
 						billsTable(r.bills, S.event.useBillAmount, true) +
+						(tp && res.group ? '<div class="topup-sum">รวมทั้งหมด (บิลเดิม + รับเพิ่ม ' + (res.group.rounds - 1) + ' ครั้ง) ฿' + money(res.group.total) +
+							'<br>ได้รวม ' + esc(res.group.giftName) + ' ×' + res.group.qty + (res.group.bonusQty ? ' · ⭐ ' + esc(res.group.bonusGiftName || 'โบนัส') + ' ×' + res.group.bonusQty : '') + '</div>' : '') +
 						(r.note ? '<p style="font-size:14px">📝 ' + esc(r.note) + '</p>' : '') +
 						'<div id="photo-status"></div>' +
-						'<p style="font-size:13px">' + leftTxt(r.giftName, res.remaining) + (res.bonusRemaining != null ? ' · ' + leftTxt(r.bonusGiftName, res.bonusRemaining) : '') + '</p>' +
+						'<p style="font-size:13px">' + [r.qty !== 0 ? leftTxt(r.giftName, res.remaining) : '', res.bonusRemaining != null ? leftTxt(r.bonusGiftName, res.bonusRemaining) : ''].filter(Boolean).join(' · ') + '</p>' +
 						'<p class="note">' + (role === 'admin' ? 'กดผิด? ยกเลิกได้ที่ ← Admin › รายการ' : 'กดผิด? แจ้ง Admin ให้ยกเลิกรายการ') + '</p></div>');
 					if (S.photos && S.photos.length) uploadPhotos(r.id, S.photos.slice());
 				} else if (res.reason === 'DUPLICATE') {
@@ -1243,8 +1288,65 @@
 				(showAmount ? '<tr class="tot"><td>Total</td><td class="num">฿' + money(total) + '</td></tr>' : '') + '</table>';
 		}
 
+		/* ---------- รับเพิ่ม (Event แบบทุกๆ X บาท) ---------- */
+		function topupBar() {
+			const g = S.topup;
+			if (!g) return '<button type="button" class="topup-btn" onclick="openTopupPicker()">➕ รับเพิ่ม · ลูกค้าเคยแลกแล้ว กลับมาซื้อเพิ่ม</button>';
+			return '<div class="topup-box"><div class="hd"><span>➕ รับเพิ่มต่อจากรายการเดิม</span><button type="button" class="chip g" onclick="cancelTopup()">ยกเลิกรับเพิ่ม</button></div>' +
+				'<div class="hint" style="margin:4px 0">ดูบิลเดิมจากลูกค้าให้ตรงกับรายการนี้</div>' +
+				billsTable(g.bills, true, false) +
+				'<div class="got">ได้ไปแล้ว: <b>' + esc(g.giftName) + ' ×' + g.qty + '</b>' + (g.bonusQty ? ' · <span class="bonus-txt">⭐ ' + esc(g.bonusGiftName || 'โบนัส') + ' ×' + g.bonusQty + '</span>' : '') +
+				(Number(g.cat) ? ' · ' + esc(S.event.bonusRule ? S.event.bonusRule.label : '') + ' ฿' + money(g.cat) : '') + '</div>' +
+				'<div class="hint" style="margin-top:6px">กรอกเฉพาะ <b>บิลใหม่</b> ด้านล่าง ระบบรวมกับบิลเดิมแล้วแจกส่วนที่เพิ่ม</div></div>';
+		}
+		function topupSummary(g, after) {
+			const lbl = S.event.bonusRule ? S.event.bonusRule.label : '';
+			return '<div class="topup-sum" style="background:#f1fbf4">รวมบิลเดิม + บิลใหม่ ฿' + money(after.total) + (S.event.bonusRule ? ' · ' + esc(lbl) + ' ฿' + money(after.cat) : '') +
+				'<br>สิทธิ์ทั้งหมด ' + esc(g.giftName) + ' ×' + after.qty + (S.event.bonusRule ? ' · ⭐ ×' + after.bonusQty : '') +
+				'<br>ได้ไปแล้ว ' + esc(g.giftName) + ' ×' + g.qty + (S.event.bonusRule ? ' · ⭐ ×' + g.bonusQty : '') +
+				'<br><b>รอบนี้แจกเพิ่มตามด้านล่าง</b></div>';
+		}
+		function cancelTopup() { S.topup = null; buildInputFields(); }
+		let TOPUP_T = null;
+		function openTopupPicker() {
+			const m = $('modal');
+			m.innerHTML = '<div class="modal detail"><div class="row-between"><b>➕ เลือกรายการเดิม</b><button class="chip g" id="m-close">ปิด</button></div>' +
+				'<input id="tp-q" class="sm-input" style="margin:10px 0" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="ค้นจากเลขบิลเดิม (พิมพ์บางส่วนได้)">' +
+				'<div id="tp-list"><p class="muted">กำลังโหลด...</p></div></div>';
+			m.classList.remove('hidden');
+			$('m-close').onclick = closeModal;
+			$('tp-q').addEventListener('input', function () { clearTimeout(TOPUP_T); TOPUP_T = setTimeout(loadTopupList, 300); });
+			$('tp-q').focus();
+			loadTopupList();
+		}
+		async function loadTopupList() {
+			const box = $('tp-list');
+			if (!box) return;
+			const q = $('tp-q').value.trim();
+			try {
+				const rows = await rpc('staff_topup_list', { p_event_id: S.event.id, p_q: q || null });
+				if ($('tp-q') && $('tp-q').value.trim() !== q) return;
+				if (!rows.length) { box.innerHTML = '<p class="muted">' + (q ? 'ไม่พบบิล "' + esc(q) + '"' : 'ยังไม่มีรายการ') + '</p>'; return; }
+				box.innerHTML = (q ? '' : '<div class="hint" style="margin-bottom:6px">30 รายการล่าสุด · พิมพ์เลขบิลเพื่อค้นหา</div>') + rows.map(function (g, i) {
+					return '<button type="button" class="topup-item" data-i="' + i + '"><div class="b">' + g.bills.map(function (b) { return esc(b.billNo || '-') + ' ฿' + money(b.amount); }).join(' · ') + '</div>' +
+						'<div class="m">' + esc(g.ts.slice(0, 16)) + (g.memberId ? ' · สมาชิก ' + esc(g.memberId) : '') + (g.rounds > 1 ? ' · รับเพิ่มแล้ว ' + (g.rounds - 1) + ' ครั้ง' : '') + '</div>' +
+						'<div class="m">รวม ฿' + money(g.total) + ' → ได้ไปแล้ว ' + esc(g.giftName) + ' ×' + g.qty + (g.bonusQty ? ' · ⭐ ×' + g.bonusQty : '') + '</div></button>';
+				}).join('');
+				box.querySelectorAll('.topup-item').forEach(function (b) {
+					b.addEventListener('click', function () {
+						S.topup = rows[Number(b.dataset.i)];
+						closeModal();
+						setErr('');
+						buildInputFields();
+						const first = $('bill-rows') && $('bill-rows').querySelector('input');
+						if (first) first.focus();
+					});
+				});
+			} catch (e) { box.innerHTML = ''; closeModal(); handleError(e, $('err')); }
+		}
+
 		function resetStaff() {
-			S.input = null; S.note = null;
+			S.input = null; S.note = null; S.topup = null;
 			$('step-result').classList.add('hidden');
 			$('step-input').classList.remove('hidden');
 			buildInputFields();
@@ -1322,13 +1424,13 @@
 		async function exportCsv(eventId) {
 			try {
 				const d = await rpc('event_export', { p_event_id: eventId });
-				const head = ['timestamp', 'member_id', 'bill_no', 'bill_total', 'bill_count', 'bills_detail', 'gift', 'qty', 'cat_amount', 'bonus_gift', 'bonus_qty', 'staff', 'status', 'matched_by', 'matched_key', 'note', 'photo_count', 'voided_at', 'voided_by'];
+				const head = ['timestamp', 'member_id', 'bill_no', 'bill_total', 'bill_count', 'bills_detail', 'gift', 'qty', 'cat_amount', 'bonus_gift', 'bonus_qty', 'staff', 'status', 'matched_by', 'matched_key', 'note', 'photo_count', 'voided_at', 'voided_by', 'id', 'topup_of'];
 				const q = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
 				const t = function (v) { return v ? '="' + String(v).replace(/"/g, '') + '"' : ''; }; // กัน Excel ตัด 0 นำหน้า
 				const lines = d.rows.map(function (r) {
 					// bills_detail = เลขบิล:ยอด | เลขบิล:ยอด
 					const detail = (r.bills || []).map(function (b) { return (b.billNo || '-') + (b.amount != null ? ':' + b.amount : ''); }).join(' | ');
-					return [q(r.ts), t(r.memberId), t(r.billNo), r.billAmount == null ? '' : r.billAmount, (r.bills || []).length || '', q(detail), q(r.giftName), r.qty || 1, r.catAmount == null ? '' : r.catAmount, q(r.bonusGiftName), r.bonusQty || '', q(r.staff), q(r.status), q(r.matchedBy), q(r.matchedKey), q(r.note), r.photoCount || '', q(r.voidedAt), q(r.voidedBy)].join(',');
+					return [q(r.ts), t(r.memberId), t(r.billNo), r.billAmount == null ? '' : r.billAmount, (r.bills || []).length || '', q(detail), q(r.giftName), r.qty == null ? 1 : r.qty, r.catAmount == null ? '' : r.catAmount, q(r.bonusGiftName), r.bonusQty || '', q(r.staff), q(r.status), q(r.matchedBy), q(r.matchedKey), q(r.note), r.photoCount || '', q(r.voidedAt), q(r.voidedBy), r.id, r.parentId || ''].join(',');
 				});
 				const csv = '﻿' + head.join(',') + '\n' + lines.join('\n');
 				const a = document.createElement('a');
