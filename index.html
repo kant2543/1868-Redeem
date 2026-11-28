@@ -60,6 +60,8 @@
 		.gift-btn .n { font-size:16px; font-weight:700; line-height:1.3; margin-top:8px; }
 		.gift-btn .r { color:var(--muted); font-size:13px; }
 		.gift-btn:disabled { border-color:#ccc; opacity:.5; }
+		.gift-btn.short { border-color:var(--red); background:#fff5f5; }
+		.gift-btn.short .r { color:var(--red); font-weight:700; }
 
 		/* คงเหลือ */
 		.stock { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
@@ -643,6 +645,11 @@
 		}
 
 		// ใกล้หมด = เหลือ ≤ 10 หรือ ≤ 20% ของ stock (เอาค่าที่น้อยกว่า) → ของจำนวนน้อยไม่ขึ้นเหลืองตั้งแต่แรก
+		// ข้อความคงเหลือหลังแลก (ติดลบ = แจกเกินสต๊อก)
+		function leftTxt(name, n) {
+			return n < 0 ? '<span style="display:inline-block;background:#fff;color:var(--red);font-weight:700;border-radius:8px;padding:2px 8px;margin:2px 0">❗ ' + esc(name) + ' เกินสต๊อก ' + (-n) + ' ชิ้น</span>' : esc(name) + ' เหลือ ' + n + ' ชิ้น';
+		}
+
 		function stockClass(g) {
 			const lowAt = Math.min(LOW_STOCK, Math.ceil(g.stock * 0.2));
 			return g.remaining <= 0 ? 'out' : g.remaining <= lowAt ? 'low' : '';
@@ -992,7 +999,7 @@
 				const cls = stockClass(g);
 				const badge = cls === 'out' ? '<span class="badge">หมดแล้ว</span>' : cls === 'low' ? '<span class="badge">ใกล้หมด</span>' : '';
 				return '<div class="' + cls + (g.isBonus && cls !== 'out' && cls !== 'low' ? ' bonus' : '') + '">' + (g.isBonus ? '<span class="bonus-tag">⭐ โบนัส</span>' : '') + giftImg(g.id) + '<small>' + esc(g.name) + (g.minTotal != null ? '<br><span style="color:#00782A;font-weight:700">Tier ฿' + money(g.minTotal) + '</span>' : '') + '</small><b>' + g.remaining + '</b>' +
-					'<small>จาก ' + g.stock + ' (แลกแล้ว ' + g.used + ')</small>' + (badge ? '<br>' + badge : '') + '</div>';
+					'<small>จาก ' + g.stock + ' (แลกแล้ว ' + g.used + ')</small>' + (g.used > g.stock ? '<br><span class="badge" style="background:var(--red);color:#fff">❗ เกิน ' + (g.used - g.stock) + '</span>' : badge ? '<br>' + badge : '') + '</div>';
 			}).join('');
 		}
 
@@ -1115,7 +1122,7 @@
 			};
 			if (tiered) gifts.sort(function (a, b) { const x = rank(a), y = rank(b); return (x[0] - y[0]) || (x[1] - y[1]); });
 			// ของหลักมีอย่างเดียว (ไม่มี Tier) → ระบบเลือกให้ ไปหน้ายืนยันเลย
-			if (!tiered && gifts.length === 1 && gifts[0].remaining >= giftQty(gifts[0])) { S.autoGift = true; confirmGift(gifts[0]); return; }
+			if (!tiered && gifts.length === 1) { S.autoGift = true; confirmGift(gifts[0]); return; }
 			S.autoGift = false;
 			let lastKey, otherShown = false;
 			const btns = gifts.map(function (g) {
@@ -1134,9 +1141,9 @@
 						otherShown = true;
 					}
 				}
-				return head + '<button class="gift-btn' + (tiered && !main ? ' other' : '') + '" data-id="' + g.id + '"' + (short ? ' disabled' : '') + '>' + giftImg(g.id) +
+				return head + '<button class="gift-btn' + (tiered && !main ? ' other' : '') + (short ? ' short' : '') + '" data-id="' + g.id + '">' + giftImg(g.id) +
 					'<div class="n">' + esc(g.name) + (gq > 1 ? ' ×' + gq : '') + '</div>' +
-					'<div class="r">' + (g.remaining <= 0 ? 'หมดแล้ว' : short ? 'เหลือ ' + g.remaining + ' ชิ้น ไม่พอ' : 'เหลือ ' + g.remaining + ' ชิ้น') + '</div></button>';
+					'<div class="r">' + (g.remaining <= 0 ? '❗ หมดแล้ว · แลกเกินได้' : short ? '❗ เหลือ ' + g.remaining + ' ชิ้น ไม่พอ' : 'เหลือ ' + g.remaining + ' ชิ้น') + '</div></button>';
 			}).join('');
 			$('step-input').classList.add('hidden');
 			$('step-result').innerHTML = '<div class="card"><label>✅ ' + describeInput(S.input) + ' — เลือกของรางวัล</label>' +
@@ -1162,7 +1169,8 @@
 					? '<p style="color:var(--red);margin:4px 0;font-weight:700">❗ ' + (Number(g.minTotal) === firstTier(S.event)
 						? 'ยอด ฿' + money(S.input.billAmount) + ' ยังไม่ถึง ฿' + money(g.minTotal)
 						: 'ของ Tier ฿' + money(g.minTotal) + ' สูงกว่ายอดลูกค้า (฿' + money(S.input.billAmount) + ')') + '</p>' : '') +
-				(S.input.bonusGift && S.input.bonusGift.remaining < S.input.bonusQty ? '<p style="color:var(--red);margin:4px 0">⚠️ ' + esc(S.input.bonusGift.name) + ' เหลือ ' + S.input.bonusGift.remaining + ' ชิ้น ไม่พอ</p>' : '') +
+				(g.remaining < giftQty(g) ? '<p style="color:var(--red);margin:4px 0;font-weight:700">❗ ' + esc(g.name) + (g.remaining > 0 ? ' เหลือ ' + g.remaining + ' ชิ้น ไม่พอ' : ' หมดแล้ว') + ' · ยืนยัน = แจกเกินสต๊อก</p>' : '') +
+				(S.input.bonusGift && S.input.bonusGift.remaining < S.input.bonusQty ? '<p style="color:var(--red);margin:4px 0;font-weight:700">❗ ' + esc(S.input.bonusGift.name) + (S.input.bonusGift.remaining > 0 ? ' เหลือ ' + S.input.bonusGift.remaining + ' ชิ้น ไม่พอ' : ' หมดแล้ว') + ' · ยืนยัน = แจกเกินสต๊อก</p>' : '') +
 				(extra ? '<p style="margin:4px 0">' + extra.replace(/^<br>/, '') + '</p>' : '') +
 				'<div class="btns"><button class="btn btn-ghost" id="m-cancel">ยกเลิก</button>' +
 				'<button class="btn btn-primary" id="m-ok">ยืนยัน</button></div></div>';
@@ -1192,7 +1200,7 @@
 						billsTable(r.bills, S.event.useBillAmount, true) +
 						(r.note ? '<p style="font-size:14px">📝 ' + esc(r.note) + '</p>' : '') +
 						'<div id="photo-status"></div>' +
-						'<p style="font-size:13px">เหลือ ' + res.remaining + ' ชิ้น' + (res.bonusRemaining != null ? ' · ' + esc(r.bonusGiftName) + ' เหลือ ' + res.bonusRemaining : '') + '</p>' +
+						'<p style="font-size:13px">' + leftTxt(r.giftName, res.remaining) + (res.bonusRemaining != null ? ' · ' + leftTxt(r.bonusGiftName, res.bonusRemaining) : '') + '</p>' +
 						'<p class="note">' + (role === 'admin' ? 'กดผิด? ยกเลิกได้ที่ ← Admin › รายการ' : 'กดผิด? แจ้ง Admin ให้ยกเลิกรายการ') + '</p></div>');
 					if (S.photos && S.photos.length) uploadPhotos(r.id, S.photos.slice());
 				} else if (res.reason === 'DUPLICATE') {
