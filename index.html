@@ -89,6 +89,12 @@
 
 		/* รายการ */
 		.recent { font-size:13px; }
+		.all-tools { margin:10px 0 4px; }
+		.all-tools input { width:100%; margin-bottom:8px; }
+		.all-tools .chips { display:flex; flex-wrap:wrap; gap:6px; }
+		.all-tools .chips button { border:1.5px solid #cfe3d6; background:#fff; border-radius:999px; padding:5px 10px; font-size:13px; cursor:pointer; }
+		.all-tools .chips button.on { background:#00AE3D; border-color:#00AE3D; color:#fff; font-weight:700; }
+		.all-tools .cnt { font-size:13px; color:var(--muted); margin-top:8px; }
 		.recent .row { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid #eef1ef; }
 		.recent .meta { display:flex; align-items:center; gap:8px; color:#999; white-space:nowrap; }
 		.recent .row.voided .txt { text-decoration:line-through; color:#999; }
@@ -328,7 +334,8 @@
 			</div>
 
 			<div class="card">
-				<label>รายการล่าสุด</label>
+				<div class="row-between"><label id="recent-lbl" style="margin:0">รายการล่าสุด</label><button class="chip g" id="recent-all" onclick="toggleAll('recent', S.event.id, false)">ดูทั้งหมด</button></div>
+				<div id="recent-tools"></div>
 				<div class="recent" id="recent"></div>
 			</div>
 		</div>
@@ -1009,6 +1016,7 @@
 			try {
 				const d = await rpc('event_dashboard', { p_event_id: S.event.id });
 				S.event = d.event;
+				if ($('recent-tools')) { delete ALL.recent; $('recent-tools').innerHTML = ''; $('recent-lbl').textContent = 'รายการล่าสุด'; $('recent-all').textContent = 'ดูทั้งหมด'; }
 				S.tierGifts = d.gifts.some(function (g) { return g.minTotal != null && !g.isBonus; });
 				renderStock($('stock'), d.gifts);
 				renderRecent($('recent'), d.recent, false, S.event.id);
@@ -1025,7 +1033,7 @@
 			}).join('');
 		}
 
-		function renderRecent(el, rows, canVoid, eventId) {
+		function renderRecent(el, rows, canVoid, eventId, withDate) {
 			if (!rows.length) { el.innerHTML = '<div class="muted">ยังไม่มีรายการ</div>'; return; }
 			el.innerHTML = rows.map(function (x) {
 				const tag = x.status === 'REDEEMED' ? (x.parentId ? '<span class="tag t">เพิ่ม</span>' : '<span class="tag r">รับ</span>')
@@ -1034,7 +1042,7 @@
 				const icons = (x.photoCount ? ' 📷' + x.photoCount : '') + (x.note ? ' 📝' : '');
 				const voidBtn = canVoid && x.status === 'REDEEMED' ? '<button class="btn-void" data-id="' + x.id + '">ยกเลิก</button>' : '';
 				return '<div class="row clickable' + (x.status === 'VOID' ? ' voided' : '') + '" data-id="' + x.id + '"><span>' + tag + ' <span class="txt">' + describeInput(x) + ' → ' + giftLine(x) + '</span>' + icons + '</span>' +
-					'<span class="meta">' + esc(x.ts.slice(11, 16)) + voidBtn + '</span></div>';
+					'<span class="meta">' + esc(withDate ? x.ts.slice(0, 5) + ' ' + x.ts.slice(11, 16) : x.ts.slice(11, 16)) + voidBtn + '</span></div>';
 			}).join('');
 			el.querySelectorAll('.row').forEach(function (r) {
 				r.addEventListener('click', function (ev) {
@@ -1048,6 +1056,59 @@
 					b.addEventListener('click', function () { confirmVoid(row); });
 				});
 			}
+		}
+
+		/* ---------- ดูรายการทั้งหมด (ค้นหา + กรองสถานะ) ---------- */
+		const ALL = {}; // listId → { rows, eventId, canVoid, f }
+		async function toggleAll(listId, eventId, canVoid) {
+			const btn = $(listId + '-all');
+			if (ALL[listId]) { // ปิด → กลับไปรายการล่าสุด
+				delete ALL[listId];
+				$(listId + '-tools').innerHTML = '';
+				btn.textContent = 'ดูทั้งหมด';
+				if (listId === 'recent') await loadStaffDashboard();
+				else await adminTab('log');
+				return;
+			}
+			btn.disabled = true; btn.textContent = 'กำลังโหลด...';
+			try {
+				const d = await rpc('event_export', { p_event_id: eventId });
+				ALL[listId] = { rows: d.rows.slice().reverse(), eventId: eventId, canVoid: canVoid, f: 'all' };
+				$(listId + '-lbl').textContent = 'รายการทั้งหมด';
+				btn.textContent = 'ย่อ';
+				$(listId + '-tools').innerHTML = '<div class="all-tools">' +
+					'<input class="sm-input" id="' + listId + '-q" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ค้นหา เลขบิล / รหัสสมาชิก / ของรางวัล / ผู้บันทึก">' +
+					'<div class="chips">' + [['all', 'ทั้งหมด'], ['REDEEMED', 'รับ'], ['TOPUP', 'เพิ่ม'], ['DUPLICATE_ATTEMPT', 'ซ้ำ'], ['VOID', 'ยกเลิก']].map(function (c) {
+						return '<button type="button" data-f="' + c[0] + '"' + (c[0] === 'all' ? ' class="on"' : '') + '>' + c[1] + '</button>';
+					}).join('') + '</div><div class="cnt" id="' + listId + '-cnt"></div></div>';
+				$(listId + '-q').addEventListener('input', function () { renderAll(listId); });
+				$(listId + '-tools').querySelectorAll('.chips button').forEach(function (b) {
+					b.addEventListener('click', function () {
+						ALL[listId].f = b.dataset.f;
+						$(listId + '-tools').querySelectorAll('.chips button').forEach(function (x) { x.classList.toggle('on', x === b); });
+						renderAll(listId);
+					});
+				});
+				renderAll(listId);
+			} catch (e) { btn.textContent = 'ดูทั้งหมด'; handleError(e); }
+			btn.disabled = false;
+		}
+		function renderAll(listId) {
+			const st = ALL[listId];
+			if (!st) return;
+			const key = function (v) { return String(v || '').toUpperCase().replace(/[\s-]/g, ''); };
+			const q = key($(listId + '-q').value);
+			const rows = st.rows.filter(function (r) {
+				if (st.f === 'TOPUP' ? !(r.status === 'REDEEMED' && r.parentId) : st.f === 'REDEEMED' ? !(r.status === 'REDEEMED' && !r.parentId) : st.f !== 'all' && r.status !== st.f) return false;
+				if (!q) return true;
+				const hay = [r.memberId, r.billNo, r.giftName, r.bonusGiftName, r.staff, r.note].concat((r.bills || []).map(function (b) { return b.billNo; })).map(key).join('|');
+				return hay.indexOf(q) >= 0;
+			});
+			let main = 0, bonus = 0, amt = 0;
+			rows.forEach(function (r) { if (r.status === 'REDEEMED') { main += r.qty == null ? 1 : r.qty; bonus += r.bonusQty || 0; amt += Number(r.billAmount) || 0; } });
+			$(listId + '-cnt').innerHTML = 'แสดง <b>' + rows.length + '</b> จาก ' + st.rows.length + ' รายการ' +
+				(main || bonus ? ' · แจกแล้ว ' + main + ' ชิ้น' + (bonus ? ' · ⭐ ' + bonus : '') : '') + (amt ? ' · ยอดบิล ฿' + money(amt) : '');
+			renderRecent($(listId), rows, st.canVoid, st.eventId, true);
 		}
 
 		/* ---------- รายละเอียด 1 รายการ (บิล / หมายเหตุ / รูป) ---------- */
@@ -1498,6 +1559,7 @@
 
 		async function adminTab(tab) {
 			A.tab = tab;
+			delete ALL['ae-recent'];
 			document.querySelectorAll('.tab').forEach(function (t) { t.classList.toggle('on', t.dataset.tab === tab); });
 			if (tab === 'settings') { openEditor(A.eventId); return; }
 			try {
@@ -1514,7 +1576,7 @@
 					const d = await rpc('event_dashboard', { p_event_id: A.eventId });
 					renderAdminHeader(d.event);
 					$('ae-body').innerHTML = '<div class="card"><label>คงเหลือ</label><div class="stock" id="ae-stock"></div></div>' +
-						'<div class="card"><label>20 รายการล่าสุด (ดูทั้งหมดใน CSV)</label><div class="recent" id="ae-recent"></div></div>';
+						'<div class="card"><div class="row-between"><label id="ae-recent-lbl" style="margin:0">20 รายการล่าสุด</label><button class="chip g" id="ae-recent-all" onclick="toggleAll(\'ae-recent\', A.eventId, true)">ดูทั้งหมด</button></div><div id="ae-recent-tools"></div><div class="recent" id="ae-recent"></div></div>';
 					renderStock($('ae-stock'), d.gifts);
 					renderRecent($('ae-recent'), d.recent, true, A.eventId);
 				}
